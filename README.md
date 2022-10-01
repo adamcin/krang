@@ -1,5 +1,5 @@
 # krang
-A possibly abortive attempt at writing a C->llvm IR compiler in Rust, just for learning a bit of all of it.
+A possibly abortive attempt at writing a C99->llvm IR compiler in Rust, just for learning a bit of all of it.
 
 ## The Goal
 Produce `.ll` files from `.c` and `.h` files, such that the following is subsequently possible:
