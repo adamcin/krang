@@ -11,3 +11,8 @@ $ clang hello-world.o -o hello-world
 $ ./hello-world
 Hello, world!
 ```
+
+## Quick Links
+
+* [LLVM assembly language](https://github.com/llvm/llvm-project/blob/main/llvm/docs/LangRef.rst)
+* IR C++ impl: https://github.com/llvm/llvm-project/tree/main/llvm/lib/IR
