@@ -1,5 +1,7 @@
 use std::{fmt::Debug, ops::RangeBounds};
 
+use crate::scan::SrcPos;
+
 pub type ParseResult<'a, Input, Output> = Result<(Input, Output), Input>;
 
 pub trait Parser<'a, Input, Output> {
@@ -149,10 +151,17 @@ where
     }
 }
 
-pub fn until<'a, 'u, P, A, B>(p: P, bounds: B, until: &'u str) -> impl Parser<'a, &'a str, Vec<A>>
+pub type Atom<'p> = SrcPos<'p>;
+pub type Atoms<'p> = [Atom<'p>];
+
+pub fn until<'a, 'u, P, A, B>(
+    p: P,
+    bounds: B,
+    until: &'u str,
+) -> impl Parser<'a, &'a Atoms<'a>, Vec<A>>
 where
     B: RangeBounds<usize>,
-    P: Parser<'a, &'a str, A>,
+    P: Parser<'a, &'a Atoms<'a>, A>,
     'u: 'a,
 {
     let parser = right(not(match_literal(until)), p);
@@ -172,12 +181,16 @@ where
     }
 }
 
-pub fn peek<'a, A, F, P>(count: usize, pred: F, opt_p: P) -> impl Parser<'a, &'a str, Option<A>>
+pub fn peek<'a, A, F, P>(
+    count: usize,
+    pred: F,
+    opt_p: P,
+) -> impl Parser<'a, &'a Atoms<'a>, Option<A>>
 where
-    F: Parser<'a, &'a str, bool>,
-    P: Parser<'a, &'a str, A>,
+    F: Parser<'a, &'a Atoms<'a>, bool>,
+    P: Parser<'a, &'a Atoms<'a>, A>,
 {
-    move |input: &'a str| match pred.parse(&input[0..count.min(input.len())]).ok() {
+    move |input: &'a Atoms| match pred.parse(&input[0..count.min(input.len())]).ok() {
         Some((_, true)) => opt_p
             .parse(input)
             .map(|(remaining, output)| (remaining, Some(output))),
@@ -199,24 +212,24 @@ where
     range(p, 1..)
 }
 
-pub fn match_literal<'a, 'b>(expected: &'b str) -> impl Parser<'a, &'a str, ()>
+pub fn match_literal<'a, 'b>(expected: &'b str) -> impl Parser<'a, &'a Atoms<'a>, ()>
 where
     'b: 'a,
 {
-    move |input: &'a str| match input.get(0..expected.len()) {
-        Some(next) if next == expected => Ok((&input[expected.len()..], ())),
+    move |input: &'a Atoms| match input.get(0..expected.len()) {
+        Some(next) if Atom::as_string(next) == expected => Ok((&input[expected.len()..], ())),
         _ => Err(input),
     }
 }
 
-pub fn any_char(input: &str) -> ParseResult<&str, char> {
-    match input.chars().next() {
-        Some(next) => Ok((&input[next.len_utf8()..], next)),
+pub fn any_char<'a>(input: &'a Atoms<'a>) -> ParseResult<&'a Atoms<'a>, char> {
+    match input.iter().next() {
+        Some(next) => Ok((&input[next.chat().len_utf8()..], next.chat())),
         _ => Err(input),
     }
 }
 
-pub fn eof(input: &str) -> ParseResult<&str, ()> {
+pub fn eof<'a>(input: &'a Atoms<'a>) -> ParseResult<&'a Atoms<'a>, ()> {
     if input.is_empty() {
         Ok((input, ()))
     } else {
@@ -224,39 +237,39 @@ pub fn eof(input: &str) -> ParseResult<&str, ()> {
     }
 }
 
-pub fn whitespace_char<'a>() -> impl Parser<'a, &'a str, char> {
+pub fn whitespace_char<'a>() -> impl Parser<'a, &'a Atoms<'a>, char> {
     pred(any_char, |c| c.is_whitespace())
 }
 
-pub fn inlinespace_char<'a>() -> impl Parser<'a, &'a str, char> {
+pub fn inlinespace_char<'a>() -> impl Parser<'a, &'a Atoms<'a>, char> {
     pred(any_char, |c| c.is_whitespace() && c != &'\n' && c != &'\r')
 }
 
-pub fn non_nl_char<'a>() -> impl Parser<'a, &'a str, char> {
+pub fn non_nl_char<'a>() -> impl Parser<'a, &'a Atoms<'a>, char> {
     pred(any_char, |c| c != &'\n' && c != &'\r')
 }
 
-pub fn space1<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
+pub fn space1<'a>() -> impl Parser<'a, &'a Atoms<'a>, Vec<char>> {
     one_or_more(whitespace_char())
 }
 
-pub fn space0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
+pub fn space0<'a>() -> impl Parser<'a, &'a Atoms<'a>, Vec<char>> {
     zero_or_more(whitespace_char())
 }
 
-pub fn pad1<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
+pub fn pad1<'a>() -> impl Parser<'a, &'a Atoms<'a>, Vec<char>> {
     one_or_more(inlinespace_char())
 }
 
-pub fn pad0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
+pub fn pad0<'a>() -> impl Parser<'a, &'a Atoms<'a>, Vec<char>> {
     zero_or_more(inlinespace_char())
 }
 
-pub fn digit_char<'a>() -> impl Parser<'a, &'a str, char> {
+pub fn digit_char<'a>() -> impl Parser<'a, &'a Atoms<'a>, char> {
     pred(any_char, |c| c.is_ascii_digit())
 }
 
-pub fn i16_literal<'a>() -> impl Parser<'a, &'a str, i16> {
+pub fn i16_literal<'a>() -> impl Parser<'a, &'a Atoms<'a>, i16> {
     and_then(
         pair(ok(pred(any_char, |c| c == &'-')), range(digit_char(), 0..)),
         |(neg, digits)| {
@@ -269,15 +282,15 @@ pub fn i16_literal<'a>() -> impl Parser<'a, &'a str, i16> {
     )
 }
 
-pub fn newline<'a>() -> impl Parser<'a, &'a str, ()> {
+pub fn newline<'a>() -> impl Parser<'a, &'a Atoms<'a>, ()> {
     or_else(eof, or_else(match_literal("\r\n"), match_literal("\n")))
 }
 
-pub fn non_nl0<'a>() -> impl Parser<'a, &'a str, Vec<char>> {
+pub fn non_nl0<'a>() -> impl Parser<'a, &'a Atoms<'a>, Vec<char>> {
     zero_or_more(non_nl_char())
 }
 
-pub fn inline_comment<'a>() -> impl Parser<'a, &'a str, String> {
+pub fn inline_comment<'a>() -> impl Parser<'a, &'a Atoms<'a>, String> {
     right(
         match_literal("//"),
         left(
@@ -289,7 +302,7 @@ pub fn inline_comment<'a>() -> impl Parser<'a, &'a str, String> {
     )
 }
 
-pub fn block_comment<'a>() -> impl Parser<'a, &'a str, String> {
+pub fn block_comment<'a>() -> impl Parser<'a, &'a Atoms<'a>, String> {
     right(
         match_literal("/*"),
         left(
@@ -308,7 +321,7 @@ where
     map(p, |_| ())
 }
 
-pub fn comspace<'a>() -> impl Parser<'a, &'a str, ()> {
+pub fn comspace<'a>() -> impl Parser<'a, &'a Atoms<'a>, ()> {
     drop(range(
         or_else(
             drop(space1()),
@@ -320,46 +333,79 @@ pub fn comspace<'a>() -> impl Parser<'a, &'a str, ()> {
 
 #[cfg(test)]
 mod test {
+    use std::io::Error;
+
+    use crate::csource::CSource;
+
     use super::*;
 
     #[test]
-    fn literal_parser() {
+    fn literal_parser() -> Result<(), Error> {
+        let hello_mike = CSource::inline("Hello Mike!")?;
+        let hello_joe_and_robert = CSource::inline("Hello Joe! Hello Robert!")?;
+        let hello_joe = CSource::inline("Hello Joe!")?;
         let parse_joe = match_literal("Hello Joe!");
-        assert_eq!(Ok(("", ())), parse_joe.parse("Hello Joe!"));
         assert_eq!(
-            Ok((" Hello Robert!", ())),
-            parse_joe.parse("Hello Joe! Hello Robert!")
+            Ok((&hello_joe[hello_joe.len()..], ())),
+            parse_joe.parse(hello_joe.stream())
         );
-        assert_eq!(Err("Hello Mike!"), parse_joe.parse("Hello Mike!"));
+        assert_eq!(
+            Ok((&hello_joe_and_robert[10..], ())),
+            parse_joe.parse(hello_joe_and_robert.stream())
+        );
+        assert_eq!(
+            Err(hello_mike.stream()),
+            parse_joe.parse(hello_mike.stream())
+        );
+        Ok(())
     }
 
     #[test]
-    fn digit_parser() {
+    fn digit_parser() -> Result<(), Error> {
+        let letters = CSource::inline("abcd")?;
+        let numlet = CSource::inline("1abc")?;
         let parse_digit = digit_char();
-        assert_eq!(Ok(("abc", '1')), parse_digit.parse("1abc"));
-        assert_eq!(Err("abcd"), parse_digit.parse("abcd"));
+        assert_eq!(Ok((&numlet[1..], '1')), parse_digit.parse(numlet.stream()));
+        assert_eq!(Err(letters.stream()), parse_digit.parse(letters.stream()));
+        Ok(())
     }
 
     #[test]
-    fn whitespace_parser() {
+    fn whitespace_parser() -> Result<(), Error> {
+        let letters = CSource::inline("abcd")?;
+        let wsplet = CSource::inline(" abc")?;
         let parse_wsp = whitespace_char();
-        assert_eq!(Ok(("abc", ' ')), parse_wsp.parse(" abc"));
-        assert_eq!(Err("abcd"), parse_wsp.parse("abcd"));
+        assert_eq!(Ok((&wsplet[1..], ' ')), parse_wsp.parse(wsplet.stream()));
+        assert_eq!(Err(letters.stream()), parse_wsp.parse(letters.stream()));
+        Ok(())
     }
 
     #[test]
-    fn newline_parser() {
+    fn newline_parser() -> Result<(), Error> {
+        let letters = CSource::inline("abcd")?;
+        let carret = CSource::inline("\r\nabc")?;
+        let justnew = CSource::inline("\nHey")?;
         let parse_nl = newline();
-        assert_eq!(Ok(("Hey", ())), parse_nl.parse("\nHey"));
-        assert_eq!(Ok(("abc", ())), parse_nl.parse("\r\nabc"));
-        assert_eq!(Err("abcd"), parse_nl.parse("abcd"));
+        assert_eq!(Ok((&justnew[1..], ())), parse_nl.parse(justnew.stream()));
+        assert_eq!(Ok((&carret[2..], ())), parse_nl.parse(carret.stream()));
+        assert_eq!(Err(letters.stream()), parse_nl.parse(letters.stream()));
+        Ok(())
+    }
+
+    fn is_eq<'a>(p: &'a [SrcPos<'a>]) -> ParseResult<&'a [SrcPos<'a>], bool> {
+        Ok((p, p.iter().any(|q| q.chat() == '=')))
     }
 
     #[test]
-    fn peek_parser() {
+    fn peek_parser() -> Result<(), Error> {
+        let abc_eq = CSource::inline("ABC=")?;
+        let abc = CSource::inline("ABC")?;
+        let abcd = CSource::inline("ABCD")?;
+        let ad_eq_f = CSource::inline("AD=f")?;
+        let amd_eq_f = CSource::inline("AMD=f")?;
         let parse_peek = peek(
             4,
-            |p: &'static str| Ok((p, p.contains('='))),
+            is_eq,
             map(
                 left(
                     range(
@@ -371,13 +417,18 @@ mod test {
                 |chars| -> String { chars.into_iter().collect() },
             ),
         );
-        assert_eq!(Ok(("f", Some("AMD".to_owned()))), parse_peek.parse("AMD=f"));
-        assert_eq!(Ok(("f", Some("AD".to_owned()))), parse_peek.parse("AD=f"));
-        assert_eq!(Ok(("ABCD", None)), parse_peek.parse("ABCD"));
-        assert_eq!(Ok(("ABC", None)), parse_peek.parse("ABC"));
-        assert_eq!(Err("ABC="), parse_peek.parse("ABC="));
-    }
+        assert_eq!(
+            Ok((&amd_eq_f[amd_eq_f.len() - 1..], Some("AMD".to_owned()))),
+            parse_peek.parse(amd_eq_f.stream())
+        );
+        assert_eq!(
+            Ok((&ad_eq_f[ad_eq_f.len() - 1..], Some("AD".to_owned()))),
+            parse_peek.parse(ad_eq_f.stream())
+        );
+        assert_eq!(Ok((abcd.stream(), None)), parse_peek.parse(abcd.stream()));
+        assert_eq!(Ok((abc.stream(), None)), parse_peek.parse(abc.stream()));
+        assert_eq!(Err(abc_eq.stream()), parse_peek.parse(abc_eq.stream()));
 
-    #[test]
-    fn simple_test() {}
+        Ok(())
+    }
 }

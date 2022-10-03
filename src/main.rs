@@ -3,7 +3,10 @@
 #![feature(absolute_path)]
 
 mod common;
+mod csource;
 mod parse;
+mod read;
+mod scan;
 
 fn main() {
     println!("Hello, world!");
