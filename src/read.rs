@@ -84,23 +84,49 @@ impl<'read> CharReaderIter<'read> {
     }
 }
 
-impl<'a> Iterator for CharReaderIter<'a> {
-    type Item = Result<char, Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.reader.read() {
-            Ok(Some(next)) => Some(Ok(next)),
-            Err(err) => Some(Err(err)),
-            _ => None,
+impl<'a> TryingIterator for CharReaderIter<'a> {
+    type OkItem = char;
+
+    fn try_next(&mut self) -> Result<Option<Self::OkItem>, Error> {
+        self.reader.read()
+    }
+}
+
+pub trait TryingIterator {
+    type OkItem;
+    fn try_next(&mut self) -> Result<Option<Self::OkItem>, Error>;
+}
+
+pub struct TryingIteratorAdaptor<'a, T> {
+    iter: Box<dyn TryingIterator<OkItem = T> + 'a>,
+    is_err: bool,
+}
+
+impl<'a, T> TryingIteratorAdaptor<'a, T> {
+    pub fn new<I: TryingIterator<OkItem = T> + 'a>(iter: I) -> Self {
+        Self {
+            iter: Box::new(iter),
+            is_err: false,
         }
     }
 }
 
-impl<'a> IntoIterator for CharReader<'a> {
-    type Item = Result<char, Error>;
-    type IntoIter = CharReaderIter<'a>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.into_chars()
-        //SrcPosIter::new().into_ignore_comments()
+impl<'a, T> Iterator for TryingIteratorAdaptor<'a, T> {
+    type Item = Result<T, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_err {
+            None
+        } else {
+            let result = self.iter.try_next();
+            match result {
+                Ok(next) => next.map(Ok),
+                Err(err) => {
+                    self.is_err = true;
+                    Some(Err(err))
+                }
+            }
+        }
     }
 }
 
