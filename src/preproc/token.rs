@@ -1,11 +1,8 @@
 use std::fmt::Display;
 
-use crate::{
-    parse::*,
-    source::token::{digit_char, match_literal, non_nl_char, space0, until, Atoms},
-};
+use crate::{parse::*, scan::*};
 
-use super::{id::Id, keyword::Keyword};
+use super::{id::Id, keyword::Keyword, pptoken::PPToken};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IntConst(i16);
@@ -35,10 +32,10 @@ impl IntConst {
     }
 }
 impl<'a> Parses<'a> for IntConst {
-    type Input = &'a Atoms<'a>;
+    type Input = &'a [Ch];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         and_then(
-            map(range(digit_char(), 1..), |chars| -> String {
+            map(range(1.., digit_char()), |chars| -> String {
                 chars.into_iter().collect()
             }),
             |token| {
@@ -89,7 +86,7 @@ impl StringConst {
     }
 }
 impl<'a> Parses<'a> for StringConst {
-    type Input = &'a Atoms<'a>;
+    type Input = &'a [Ch];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         map(
             right(
@@ -115,82 +112,22 @@ impl From<&str> for StringConst {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
-    Keyword(Keyword),
-    IntConst(IntConst),
-    StringConst(StringConst),
-    Identifier(Id),
+    Keyword(Loc, Keyword),
+    Identifier(Loc, Id),
 }
 impl Token {
     pub fn key(input: &[Self], filter: Keyword) -> ParseResult<'_, &[Self], Keyword> {
         match input.split_first() {
-            Some((&Self::Keyword(value), rem)) if value == filter => Ok((rem, value)),
-            _ => Err(("Token.key not matched".to_owned(), input)),
+            Some((Self::Keyword(loc, value), rem)) if value == &filter => Ok((rem, *value)),
+            _ => Err((("Token.key not matched".to_owned(), input), Vec::new())),
         }
     }
 
     pub fn id(input: &[Self]) -> ParseResult<'_, &[Self], Id> {
         match input.split_first() {
-            Some((Self::Identifier(value), rem)) => Ok((rem, value.copy())),
-            _ => Err(("Token.id not matched".to_owned(), input)),
+            Some((Self::Identifier(loc, value), rem)) => Ok((rem, value.copy())),
+            _ => Err((("Token.id not matched".to_owned(), input), Vec::new())),
         }
-    }
-
-    pub fn int(input: &[Self]) -> ParseResult<'_, &[Self], IntConst> {
-        match input.split_first() {
-            Some((Self::IntConst(value), rem)) => Ok((rem, value.copy())),
-            _ => Err(("Token.int not matched".to_owned(), input)),
-        }
-    }
-
-    pub fn str(input: &[Self]) -> ParseResult<'_, &[Self], StringConst> {
-        match input.split_first() {
-            Some((Self::StringConst(value), rem)) => Ok((rem, value.copy())),
-            _ => Err(("Token.str not matched".to_owned(), input)),
-        }
-    }
-}
-
-impl<'a> Parses<'a> for Token {
-    type Input = &'a Atoms<'a>;
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
-    where
-        Self::Input: 'a,
-    {
-        or_else(
-            map(StringConst::parse_into, Self::StringConst),
-            or_else(
-                map(IntConst::parse_into, Self::IntConst),
-                or_else(
-                    map(Id::parse_into, Self::Identifier),
-                    map(Keyword::parse_into, Self::Keyword),
-                ),
-            ),
-        )
-        .parse(input)
-    }
-}
-
-impl From<Keyword> for Token {
-    fn from(item: Keyword) -> Self {
-        Self::Keyword(item)
-    }
-}
-
-impl From<Id> for Token {
-    fn from(item: Id) -> Self {
-        Self::Identifier(item)
-    }
-}
-
-impl From<StringConst> for Token {
-    fn from(item: StringConst) -> Self {
-        Self::StringConst(item)
-    }
-}
-
-impl From<IntConst> for Token {
-    fn from(item: IntConst) -> Self {
-        Self::IntConst(item)
     }
 }
 
@@ -205,25 +142,25 @@ impl TokenStream {
     }
 }
 
-impl<'a> TokenStream {
-    pub fn tokens(&'a self) -> &'a [Token] {
+impl TokenStream {
+    pub fn tokens(&self) -> &[Token] {
         self.tokens.as_slice()
     }
 }
 
-impl<'a> Parses<'a> for TokenStream {
-    type Input = &'a Atoms<'a>;
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
-    where
-        Self::Input: 'a,
-    {
-        map(
-            range(right(ok(space0()), Token::parse_into), 0..),
-            Self::new,
-        )
-        .parse(input)
-    }
-}
+// impl<'a> Parses<'a> for TokenStream<'a> {
+//     type Input = &'a [PPToken<'a>];
+//     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+//     where
+//         Self::Input: 'a,
+//     {
+//         map(
+//             range(0.., right(ok(space0()), Token::parse_into)),
+//             Self::new,
+//         )
+//         .parse(input)
+//     }
+// }
 
 impl Display for TokenStream {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -1,0 +1,1 @@
+int simple2(char input);

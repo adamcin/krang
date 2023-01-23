@@ -2,12 +2,13 @@ use std::io::Error;
 
 use crate::{read::TryingIterator, scan::Ch};
 
-/// Physical source file multibyte characters are mapped, in an implementationdefined manner, to the source character set (introducing new-line characters for
+/// Physical source file multibyte characters are mapped, in an implementation defined manner,
+/// to the source character set (introducing new-line characters for
 /// end-of-line indicators) if necessary. Trigraph sequences are replaced by
 /// corresponding single-character internal representations.
 pub struct TrigraphFilter<'a> {
     iter: Box<dyn TryingIterator<OkItem = <Self as TryingIterator>::OkItem> + 'a>,
-    buff: [Option<Ch<'a>>; 3],
+    buff: [Option<Ch>; 3],
     idx: usize,
 }
 
@@ -35,13 +36,18 @@ impl<'a> TrigraphFilter<'a> {
         Ok(Self::new(e0, e1, e2, iter))
     }
 
-    fn check_trigraph(&self) -> Option<Ch<'a>> {
+    fn check_trigraph(&self) -> Option<Ch> {
         self.buff[self.i0()]
+            .as_ref()
             .filter(|pos| pos.chat() == '?')
-            .and_then(|_| self.buff[self.i1()].filter(|pos| pos.chat() == '?'))
             .and_then(|_| {
-                Self::map_graph(self.buff[self.i2()].map(|pos| pos.chat()))
-                    .and_then(|chat| self.buff[self.i0()].map(|pos| pos.as_char(chat)))
+                self.buff[self.i1()]
+                    .as_ref()
+                    .filter(|pos| pos.chat() == '?')
+            })
+            .and_then(|_| {
+                Self::map_graph(self.buff[self.i2()].as_ref().map(|pos| pos.chat()))
+                    .and_then(|chat| self.buff[self.i0()].as_ref().map(|pos| pos.as_char(chat)))
             })
     }
 
@@ -72,7 +78,7 @@ impl<'a> TrigraphFilter<'a> {
         (self.idx + 2) % 3
     }
 
-    fn push(&mut self, next: Option<Ch<'a>>) -> Option<Ch<'a>> {
+    fn push(&mut self, next: Option<Ch>) -> Option<Ch> {
         let temp = self.buff[self.i0()].as_ref().cloned();
         self.buff[self.i0()] = next;
         self.idx += 1;
@@ -81,7 +87,7 @@ impl<'a> TrigraphFilter<'a> {
 }
 
 impl<'a> TryingIterator for TrigraphFilter<'a> {
-    type OkItem = Ch<'a>;
+    type OkItem = Ch;
 
     fn try_next(&mut self) -> Result<Option<Self::OkItem>, std::io::Error> {
         match self.check_trigraph() {

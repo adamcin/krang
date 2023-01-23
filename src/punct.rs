@@ -1,7 +1,4 @@
-use crate::{
-    parse::{map, msg, none, or_else, ParseResult, Parser, Parses},
-    source::token::{match_literal, Atoms},
-};
+use crate::{parse::*, scan::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Punctuator {
@@ -318,14 +315,14 @@ impl Punctuator {
     }
 }
 
-impl<'a> Parser<'a, &'a Atoms<'a>, Punctuator> for Punctuator {
-    fn parse(&self, input: &'a Atoms<'a>) -> ParseResult<'a, &'a Atoms<'a>, Punctuator> {
+impl<'a> Parser<'a, &'a [Ch], Punctuator> for Punctuator {
+    fn parse(&self, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Punctuator> {
         map(match_literal(self.as_str()), |()| *self).parse(input)
     }
 }
 
 impl<'a> Parses<'a> for Punctuator {
-    type Input = &'a Atoms<'a>;
+    type Input = &'a [Ch];
 
     fn parse_into(input: Self::Input) -> crate::parse::ParseResult<'a, Self::Input, Self>
     where
@@ -333,7 +330,7 @@ impl<'a> Parses<'a> for Punctuator {
     {
         msg(
             |inp| {
-                let init_parser: Box<dyn Parser<'a, &'a Atoms<'a>, Self>> =
+                let init_parser: Box<dyn Parser<'a, &'a [Ch], Self>> =
                     Box::new(none("unexpected error in Punctuator::parse_into"));
                 vec![
                     Self::singles(),
@@ -343,16 +340,13 @@ impl<'a> Parses<'a> for Punctuator {
                 ]
                 .concat()
                 .iter()
-                .fold(
-                    init_parser,
-                    |acc, punct| -> Box<dyn Parser<&Atoms<'a>, Self>> {
-                        Box::new(or_else(
-                            move |input| punct.parse(input),
-                            // acc on the right-hand side means [doubles, singles], [triples, doubles], [fourples, triples]
-                            move |input| acc.parse(input),
-                        ))
-                    },
-                )
+                .fold(init_parser, |acc, punct| -> Box<dyn Parser<&[Ch], Self>> {
+                    Box::new(or_else(
+                        move |input| punct.parse(input),
+                        // acc on the right-hand side means [doubles, singles], [triples, doubles], [fourples, triples]
+                        move |input| acc.parse(input),
+                    ))
+                })
                 .parse(inp)
             },
             "Punctuator not matched",

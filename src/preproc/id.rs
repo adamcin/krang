@@ -1,19 +1,16 @@
 use std::fmt::Display;
 
-use crate::common::err_invalid_input;
 use crate::parse::*;
-use crate::source::token::{any_char, Atoms};
+use crate::scan::*;
 
 use super::keyword::Keyword;
+use super::pptoken::Ucn;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Id(String);
+pub struct Id(pub String);
 
 impl Id {
     pub fn new(value: String) -> Self {
-        if Keyword::is_reserved(value.as_str()) {
-            panic!("Id is reserved keyword: {}", value.as_str());
-        }
         Self(value)
     }
 
@@ -33,11 +30,11 @@ impl Id {
         Self::new(self.0.to_owned())
     }
 
-    fn is_ident_lead(c: &char) -> bool {
+    pub fn is_ident_lead(c: &char) -> bool {
         c.is_ascii_alphabetic() || c == &'_'
     }
 
-    fn is_ident(c: &char) -> bool {
+    pub fn is_ident(c: &char) -> bool {
         Self::is_ident_lead(c) || c.is_ascii_digit()
     }
 
@@ -53,29 +50,26 @@ impl From<&str> for Id {
 }
 
 impl<'a> Parses<'a> for Id {
-    type Input = &'a Atoms<'a>;
+    type Input = &'a [Ch];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
-        and_then(
-            msg(
+        msg(
+            map(
                 map(
-                    map(
-                        pair(
-                            pred(any_char, Self::is_ident_lead),
-                            range(pred(any_char, Self::is_ident), 0..),
+                    pair(
+                        pred(any_char, Self::is_ident_lead),
+                        range(
+                            0..,
+                            max(
+                                map(Ucn::parse_into, |ucn| ucn.as_char()),
+                                pred(any_char, Self::is_ident),
+                            ),
                         ),
-                        |(l, cs)| vec![vec![l], cs].concat(),
                     ),
-                    |chars| chars.into_iter().collect(),
+                    |(l, cs)| vec![vec![l], cs].concat(),
                 ),
-                "Id not matched",
+                |chars| Self::new(chars.into_iter().collect()),
             ),
-            |s: String| {
-                if Keyword::is_reserved(s.as_str()) {
-                    Err(format!("{} is a reserved keyword", s))
-                } else {
-                    Ok(Self::new(s))
-                }
-            },
+            "Id not matched",
         )
         .parse(input)
     }
@@ -86,6 +80,7 @@ impl Display for Id {
         write!(f, "{}", self.as_str())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::io::Error;
@@ -106,11 +101,14 @@ mod tests {
             parser.parse(my_class.stream())
         );
         assert_eq!(
-            Err(("Id not matched".to_owned(), one2345.stream())),
+            Err((("Id not matched".to_owned(), one2345.stream()), Vec::new())),
             parser.parse(one2345.stream())
         );
         assert_eq!(
-            Err(("Id not matched".to_owned(), one_class.stream())),
+            Err((
+                ("Id not matched".to_owned(), one_class.stream()),
+                Vec::new()
+            )),
             parser.parse(one_class.stream())
         );
         assert_eq!(

@@ -1,6 +1,14 @@
-use std::{fmt::Display, fs::File, io::Error, path::Path};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Display},
+    fs::File,
+    io::Error,
+    path::Path,
+    rc::Rc,
+};
 
 use crate::{
+    common::err_invalid_input,
     read::{CharReader, CharReaderIter, TryingIteratorAdaptor},
     scan::{Ch, ChIter},
     source::{nlsplice::NlSpliceFilter, trigraph::TrigraphFilter},
@@ -12,45 +20,67 @@ use super::comment::CommentFilter;
 /// Successful construction indicates that these translation phases have been performed:
 /// * 1: trigraph replacement
 /// * 2: splicing around escaped newlines
-pub struct SourceFile<'p> {
-    path: Box<dyn AsRef<Path> + 'p>,
-    src: Vec<Ch<'p>>,
+#[derive(Clone, Eq)]
+pub struct SourceFile {
+    path: Rc<String>,
+    src: Rc<Vec<Ch>>,
+}
+
+impl PartialEq for SourceFile {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path
+    }
+}
+
+impl Debug for SourceFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SourceFile")
+            .field("path", &self.path)
+            .field(
+                "src",
+                &String::from_iter(self.src.iter().map(|ch| ch.chat())),
+            )
+            .finish()
+    }
 }
 
 const PATH_INLINE: &str = "<inline>";
 
-impl<'p> SourceFile<'p> {
-    fn new(path: Box<dyn AsRef<Path> + 'p>, src: Vec<Ch<'p>>) -> Self {
+impl SourceFile {
+    fn new(path: Rc<String>, src: Rc<Vec<Ch>>) -> Self {
         Self { path, src }
     }
 
-    pub fn path(&self) -> &Path {
-        self.path.as_ref().as_ref()
+    pub fn path(&self) -> &str {
+        self.path.as_str()
     }
 
-    pub fn inline(input: &'p str) -> Result<Self, Error> {
-        let path = Path::new(PATH_INLINE);
+    pub fn inline(input: &str) -> Result<Self, Error> {
+        let path = Rc::new(PATH_INLINE.to_owned());
         let chars = CharReader::new(Box::new(input.as_bytes())).into_chars();
-        let src: Result<Vec<Ch>, Error> = Self::filter_source(path, chars)?.collect();
-        Ok(Self::new(Box::new(path), src?))
+        Self::read(path.clone(), chars).map(|chs| Self::new(path, Rc::new(chs)))
     }
 
-    pub fn open(path: &'p Path) -> Result<Self, Error> {
+    fn read(path: Rc<String>, chars: CharReaderIter<'_>) -> Result<Vec<Ch>, Error> {
+        Self::filter_source(path, chars)?.collect::<Result<Vec<_>, Error>>()
+    }
+
+    pub fn open(path: &Path) -> Result<Self, Error> {
+        let path_str = Rc::new(path.display().to_string());
         let chars = CharReader::new(Box::new(File::open(path)?)).into_chars();
-        let src: Result<Vec<Ch>, Error> = Self::filter_source(path, chars)?.collect();
-        Ok(Self::new(Box::new(path), src?))
+        Self::read(path_str.clone(), chars).map(|chs| Self::new(path_str, Rc::new(chs)))
     }
 
     fn filter_source(
-        path: &'p Path,
-        chars: CharReaderIter<'p>,
-    ) -> Result<TryingIteratorAdaptor<'p, Ch<'p>>, Error> {
+        path: Rc<String>,
+        chars: CharReaderIter<'_>,
+    ) -> Result<TryingIteratorAdaptor<'_, Ch>, Error> {
         Ok(TryingIteratorAdaptor::new(CommentFilter::try_filter(
             NlSpliceFilter::try_filter(TrigraphFilter::try_filter(ChIter::new(path, chars))?)?,
         )?))
     }
 
-    pub fn stream(&self) -> &[Ch<'p>] {
+    pub fn stream(&self) -> &[Ch] {
         self.src.as_slice()
     }
 
@@ -59,41 +89,41 @@ impl<'p> SourceFile<'p> {
     }
 }
 
-impl<'p> std::ops::Index<std::ops::Range<usize>> for SourceFile<'p> {
-    type Output = [Ch<'p>];
+impl std::ops::Index<std::ops::Range<usize>> for SourceFile {
+    type Output = [Ch];
 
     fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
-        &self.src[index]
+        &self.stream()[index]
     }
 }
 
-impl<'p> std::ops::Index<std::ops::RangeTo<usize>> for SourceFile<'p> {
-    type Output = [Ch<'p>];
+impl std::ops::Index<std::ops::RangeTo<usize>> for SourceFile {
+    type Output = [Ch];
 
     fn index(&self, index: std::ops::RangeTo<usize>) -> &Self::Output {
-        &self.src[index]
+        &self.stream()[index]
     }
 }
 
-impl<'p> std::ops::Index<std::ops::RangeFrom<usize>> for SourceFile<'p> {
-    type Output = [Ch<'p>];
+impl std::ops::Index<std::ops::RangeFrom<usize>> for SourceFile {
+    type Output = [Ch];
 
     fn index(&self, index: std::ops::RangeFrom<usize>) -> &Self::Output {
-        &self.src[index]
+        &self.stream()[index]
     }
 }
 
-impl<'p> std::ops::Index<std::ops::RangeFull> for SourceFile<'p> {
-    type Output = [Ch<'p>];
+impl std::ops::Index<std::ops::RangeFull> for SourceFile {
+    type Output = [Ch];
 
     fn index(&self, _index: std::ops::RangeFull) -> &Self::Output {
-        self.src.as_slice()
+        self.stream()
     }
 }
 
-impl Display for SourceFile<'_> {
+impl Display for SourceFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", Ch::as_string(self.src.as_slice()))
+        write!(f, "{}", Ch::as_string(self.stream()))
     }
 }
 

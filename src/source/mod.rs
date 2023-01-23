@@ -1,7 +1,6 @@
 pub(crate) mod comment;
 pub(crate) mod file;
 pub(crate) mod nlsplice;
-pub(crate) mod token;
 pub(crate) mod trigraph;
 
 // 1. Physical source file multibyte characters are mapped, in an implementation

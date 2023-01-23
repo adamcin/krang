@@ -10,29 +10,30 @@ enum CommentState {
 
 pub struct CommentFilter<'a> {
     iter: Box<dyn TryingIterator<OkItem = <Self as TryingIterator>::OkItem> + 'a>,
-    buff: [Option<Ch<'a>>; 2],
+    buff: [Option<Ch>; 2],
     flip: bool,
     state: CommentState,
 }
 
 impl<'a> CommentFilter<'a> {
     pub fn new<T: TryingIterator<OkItem = <Self as TryingIterator>::OkItem> + 'a>(
-        left: Option<Ch<'a>>,
-        right: Option<Ch<'a>>,
+        left: Option<Ch>,
+        right: Option<Ch>,
         iter: T,
     ) -> Self {
         let buff = [left, right];
+        let state = if Self::is_comment_line(buff[0].as_ref(), buff[1].as_ref()) {
+            CommentState::Line
+        } else if Self::is_comment_block(buff[0].as_ref(), buff[1].as_ref()) {
+            CommentState::Block
+        } else {
+            CommentState::None
+        };
         Self {
             iter: Box::new(iter),
             buff,
             flip: false,
-            state: if Self::is_comment_line(left.as_ref(), right.as_ref()) {
-                CommentState::Line
-            } else if Self::is_comment_block(left.as_ref(), right.as_ref()) {
-                CommentState::Block
-            } else {
-                CommentState::None
-            },
+            state,
         }
     }
 
@@ -44,11 +45,11 @@ impl<'a> CommentFilter<'a> {
         Ok(Self::new(left, right, iter))
     }
 
-    fn left(&self) -> Option<&Ch<'a>> {
+    fn left(&self) -> Option<&Ch> {
         self.buff[self.lidx()].as_ref()
     }
 
-    fn right(&self) -> Option<&Ch<'a>> {
+    fn right(&self) -> Option<&Ch> {
         self.buff[self.ridx()].as_ref()
     }
 
@@ -60,19 +61,19 @@ impl<'a> CommentFilter<'a> {
         (!self.flip) as usize
     }
 
-    fn char_at(pos: Option<&Ch<'a>>) -> Option<char> {
+    fn char_at(pos: Option<&Ch>) -> Option<char> {
         pos.map(|p| p.chat())
     }
 
-    fn is_comment_line(left: Option<&Ch<'a>>, right: Option<&Ch<'a>>) -> bool {
+    fn is_comment_line(left: Option<&Ch>, right: Option<&Ch>) -> bool {
         Self::char_at(left) == Some('/') && Self::char_at(right) == Some('/')
     }
 
-    fn is_comment_block(left: Option<&Ch<'a>>, right: Option<&Ch<'a>>) -> bool {
+    fn is_comment_block(left: Option<&Ch>, right: Option<&Ch>) -> bool {
         Self::char_at(left) == Some('/') && Self::char_at(right) == Some('*')
     }
 
-    fn iter_until_newline(&mut self) -> Result<Option<Ch<'a>>, Error> {
+    fn iter_until_newline(&mut self) -> Result<Option<Ch>, Error> {
         let next = self.left().map(|pos| pos.as_space());
         while let Some(pos) = self.iter.try_next()? {
             if pos.chat() == '\n' {
@@ -87,7 +88,7 @@ impl<'a> CommentFilter<'a> {
         Ok(None)
     }
 
-    fn iter_until_blockend(&mut self) -> Result<Option<Ch<'a>>, Error> {
+    fn iter_until_blockend(&mut self) -> Result<Option<Ch>, Error> {
         let next = self.left().map(|pos| pos.as_space());
         while let Some(pos) = self.iter.try_next()? {
             if pos.chat() == '*' {
@@ -119,7 +120,7 @@ impl<'a> CommentFilter<'a> {
         }
     }
 
-    fn set_next_buf(&mut self, next: Option<Ch<'a>>) -> Option<Ch<'a>> {
+    fn set_next_buf(&mut self, next: Option<Ch>) -> Option<Ch> {
         let temp = self.left().cloned();
         self.buff[self.lidx()] = next;
         self.flip = !self.flip;
@@ -129,9 +130,9 @@ impl<'a> CommentFilter<'a> {
 }
 
 impl<'a> TryingIterator for CommentFilter<'a> {
-    type OkItem = Ch<'a>;
+    type OkItem = Ch;
 
-    fn try_next(&mut self) -> Result<Option<Ch<'a>>, Error> {
+    fn try_next(&mut self) -> Result<Option<Ch>, Error> {
         match self.state {
             CommentState::Line => self.iter_until_newline(),
             CommentState::Block => self.iter_until_blockend(),

@@ -12,12 +12,12 @@ use crate::{common::err_invalid_input, read::TryingIterator, scan::Ch};
 /// splicing takes place.
 pub struct NlSpliceFilter<'a> {
     iter: Box<dyn TryingIterator<OkItem = <Self as TryingIterator>::OkItem> + 'a>,
-    last: Option<Ch<'a>>,
+    last: Option<Ch>,
 }
 
 impl<'a> NlSpliceFilter<'a> {
     pub fn new<T: TryingIterator<OkItem = <Self as TryingIterator>::OkItem> + 'a>(
-        first: Option<Ch<'a>>,
+        first: Option<Ch>,
         iter: T,
     ) -> Self {
         Self {
@@ -33,7 +33,7 @@ impl<'a> NlSpliceFilter<'a> {
         Ok(Self::new(first, iter))
     }
 
-    fn push(&mut self, next: Option<Ch<'a>>) -> Option<Ch<'a>> {
+    fn push(&mut self, next: Option<Ch>) -> Option<Ch> {
         let temp = self.last.as_ref().cloned();
         self.last = next;
         temp
@@ -41,10 +41,10 @@ impl<'a> NlSpliceFilter<'a> {
 }
 
 impl<'a> TryingIterator for NlSpliceFilter<'a> {
-    type OkItem = Ch<'a>;
+    type OkItem = Ch;
 
     fn try_next(&mut self) -> Result<Option<Self::OkItem>, std::io::Error> {
-        match (self.last, self.iter.try_next()?) {
+        match (self.last.as_ref(), self.iter.try_next()?) {
             (Some(last_pos), Some(pos)) if last_pos.chat() == '\\' && pos.chat() == '\n' => {
                 let next = self.iter.try_next()?;
                 // A source file that is not empty shall end in a new-line character,

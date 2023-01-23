@@ -1,11 +1,8 @@
 use std::fmt::Display;
 
-use crate::{
-    parse::*,
-    source::token::{match_literal, Atoms},
-};
+use crate::{parse::*, scan::*};
 
-use super::token::Token;
+use super::{id::Id, token::Token};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Keyword {
@@ -158,40 +155,47 @@ impl Keyword {
         Self::all().iter().any(|k| k.as_str() == token)
     }
 
-    pub fn as_token(self) -> Token {
-        Token::Keyword(self)
+    pub fn from_id(id: &Id) -> Option<Self> {
+        Self::all()
+            .iter()
+            .find(|k| k.as_str() == id.as_str())
+            .copied()
     }
+
+    // pub fn as_token(self) -> Token {
+    //     Token::Keyword(self)
+    // }
 }
 
-impl<'a> Parser<'a, &'a Atoms<'a>, Keyword> for Keyword {
-    fn parse(&self, input: &'a Atoms<'a>) -> ParseResult<'a, &'a Atoms<'a>, Keyword> {
+impl<'a> Parser<'a, &'a [Ch], Keyword> for Keyword {
+    fn parse(&self, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Keyword> {
         map(match_literal(self.as_str()), |()| *self).parse(input)
     }
 }
 
-impl<'a> Parser<'a, &'a [Token], Keyword> for Keyword {
-    fn parse(&self, input: &'a [Token]) -> ParseResult<'a, &'a [Token], Keyword> {
-        match input.split_first() {
-            Some((Token::Keyword(value), rem)) if value == self => Ok((rem, *self)),
-            _ => Err(("Keyword not matched".to_owned(), input)),
-        }
-    }
-}
+// impl<'a> Parser<'a, &'a [Token], Keyword> for Keyword {
+//     fn parse(&self, input: &'a [Token]) -> ParseResult<'a, &'a [Token<'a>], Keyword> {
+//         match input.split_first() {
+//             Some((Token::Keyword(value), rem)) if value == self => Ok((rem, *self)),
+//             _ => Err(("Keyword not matched".to_owned(), input)),
+//         }
+//     }
+// }
 
 impl<'a> Parses<'a> for Keyword {
-    type Input = &'a Atoms<'a>;
+    type Input = &'a [Ch];
     fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
-        let init_parser: Box<dyn Parser<'a, &'a Atoms<'a>, Self>> =
+        let init_parser: Box<dyn Parser<'a, &'a [Ch], Self>> =
             Box::new(none("unexpected error in Keyword::parse_into"));
 
         Self::all()
             .iter()
             .fold(
                 init_parser,
-                |acc, keyword| -> Box<dyn Parser<&Atoms<'a>, Self>> {
+                |acc, keyword| -> Box<dyn Parser<&[Ch], Self>> {
                     Box::new(or_else(
                         move |input| keyword.parse(input),
                         move |input| acc.parse(input),

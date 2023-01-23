@@ -8,7 +8,6 @@
  */
 int main()
 {
-
     // prints hello world
     printf("Hello World");
 
