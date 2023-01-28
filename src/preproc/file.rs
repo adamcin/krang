@@ -10,7 +10,7 @@ use crate::{
     common::err_invalid_input, error::KrangError, parse::*, scan::Loc, source::file::SourceFile,
 };
 
-use super::{directive::*, ppgroup::*, ppinclude::PPInclude, pptoken::*};
+use super::{ppgroup::*, ppinclude::PPInclude, ppline::*, pptoken::*};
 
 /// Represents a file that been preprocessed to level 3.
 #[derive(Debug)]

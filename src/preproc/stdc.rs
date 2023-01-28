@@ -1,6 +1,6 @@
 use std::{cell::Cell, collections::HashMap};
 
-use super::{directive::PPOnOffSwitch, id::Id};
+use super::{id::Id, ppline::PPOnOffSwitch};
 
 pub struct Stdcs {
     defaults: HashMap<&'static str, bool>,

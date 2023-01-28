@@ -3,10 +3,10 @@ use std::fmt::Debug;
 use crate::{error::KrangError, parse::*, punct::Punctuator, scan::*};
 
 use super::{
-    directive::*,
     id::Id,
     ppif::*,
     ppinclude::PPInclude,
+    ppline::*,
     ppmacro::{PPDefineMatch, PPDefineReplace},
     pptoken::*,
     preprocessor::{PPAble, PPContext},
@@ -154,6 +154,114 @@ impl PPAble for PPGroupPart {
             Self::ControlLine(loc, line) => {
                 let line2 = line.pass(ctx)?;
                 Ok(Self::ControlLine(loc.clone(), line2))
+            }
+            _ => Ok(self.clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PPControlLine {
+    Include(Loc, PPInclude),
+    Define(Loc, PPDefineLine),
+    Undef(Loc, Id),
+    Line(Loc, PPLineForm),
+    Error(Loc, Option<PPTokens>),
+    Pragma(Loc, PPPragmaForm),
+    Null(Loc),
+}
+impl<'a> PPControlLine {
+    pub fn loc(&'a self) -> &'a Loc {
+        match self {
+            Self::Include(loc, ..)
+            | Self::Define(loc, ..)
+            | Self::Undef(loc, ..)
+            | Self::Line(loc, ..)
+            | Self::Error(loc, ..)
+            | Self::Pragma(loc, ..)
+            | Self::Null(loc) => loc,
+        }
+    }
+
+    fn parse_include(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::Include(pos, inc) => Self::Include(pos.clone(), inc.clone()), "#include not parsed").parse(input)
+    }
+
+    fn parse_define(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::Define(pos, define_line) => Self::Define(pos.clone(), define_line.clone()), "#define not parsed").parse(input)
+    }
+
+    fn parse_undef(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::Undef(pos, id) => Self::Undef(pos.clone(), id.clone()), "#undef not parsed").parse(input)
+    }
+
+    fn parse_sharp_line(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::SharpLine(pos, line_form) => Self::Line(pos.clone(), line_form.clone()), "#line not parsed").parse(input)
+    }
+
+    fn parse_sharp_error(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::SharpError(pos, expr) => Self::Error(pos.clone(), expr.clone()), "#error not parsed").parse(input)
+    }
+
+    fn parse_pragma(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::Pragma(pos, pragma_form) => Self::Pragma(pos.clone(), pragma_form.clone()), "#pragma not parsed").parse(input)
+    }
+
+    fn parse_sharp_null(input: &'a [PPLine]) -> ParseResult<'_, &'a [PPLine], Self> {
+        parse_next!(PPLine::SharpNull(pos) => Self::Null(pos.clone()), "#<null> not parsed")
+            .parse(input)
+    }
+}
+
+impl<'a> Parses<'a> for PPControlLine {
+    type Input = &'a [PPLine];
+    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    where
+        Self::Input: 'a,
+    {
+        or_else(
+            Self::parse_include,
+            or_else(
+                Self::parse_define,
+                or_else(
+                    Self::parse_undef,
+                    or_else(
+                        Self::parse_sharp_line,
+                        or_else(
+                            Self::parse_sharp_error,
+                            or_else(Self::parse_pragma, Self::parse_sharp_null),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        .parse(input)
+    }
+}
+
+impl PPAble for PPControlLine {
+    fn pass(&self, ctx: &PPContext) -> Result<Self, KrangError> {
+        match self {
+            Self::Error(loc, tokens) => {
+                Err(KrangError::ErrorDirective(loc.clone(), tokens.clone()))
+            }
+            Self::Pragma(loc, PPPragmaForm::Stdc(id, switch)) => ctx
+                .stdc()
+                .flip(id, switch)
+                .map(|_| self.clone())
+                .map_err(|err| KrangError::PPUnrecognizedId(loc.clone(), err.clone())),
+            Self::Include(loc, inc) => {
+                let inc2 = inc.pass(ctx)?;
+                if matches!(&inc, PPInclude::HName(..) | PPInclude::QName(..)) {
+                    ctx.include(loc, inc).map(|group| {
+                        Self::Include(loc.clone(), PPInclude::Included(Box::new(group)))
+                    })
+                } else {
+                    Err(KrangError::ParseError(vec![(
+                        Some(loc.clone()),
+                        format!("failed to resolve include directive {:?}", inc2),
+                    )]))
+                }
             }
             _ => Ok(self.clone()),
         }

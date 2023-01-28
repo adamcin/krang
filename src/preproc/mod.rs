@@ -4,7 +4,6 @@ use crate::{common::err_invalid_input, compile::unit::Unit};
 
 use self::file::FileManager;
 
-pub(crate) mod directive;
 pub(crate) mod expression;
 pub(crate) mod file;
 pub(crate) mod id;
@@ -12,6 +11,7 @@ pub(crate) mod keyword;
 pub(crate) mod ppgroup;
 pub(crate) mod ppif;
 pub(crate) mod ppinclude;
+pub(crate) mod ppline;
 pub(crate) mod ppmacro;
 pub(crate) mod pptoken;
 pub(crate) mod preprocessor;

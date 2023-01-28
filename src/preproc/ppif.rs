@@ -1,10 +1,10 @@
 use crate::{error::KrangError, parse::*, scan::Loc};
 
 use super::{
-    directive::*,
     expression::PPExpression,
     id::Id,
     ppgroup::*,
+    ppline::*,
     pptoken::*,
     preprocessor::{PPAble, PPContext},
 };
