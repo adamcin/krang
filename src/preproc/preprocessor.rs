@@ -3,8 +3,8 @@ use std::{cell::Cell, fmt::Debug, path::Path, rc::Rc};
 use crate::{error::KrangError, scan::Loc};
 
 use super::{
-    directive::{PPGroup, PPGroupPart},
     file::FileManager,
+    ppgroup::{PPGroup, PPGroupPart},
     ppinclude::PPInclude,
     stdc::Stdcs,
 };
@@ -88,6 +88,22 @@ mod tests {
     fn spin() -> Result<(), KrangError> {
         let pp = Preprocessor::new();
         let unit = pp.preprocess(Path::new("tests/simple.c"))?;
+        print!("{:#?}", unit);
+        Ok(())
+    }
+
+    #[test]
+    fn ifendif() -> Result<(), KrangError> {
+        let pp = Preprocessor::new();
+        let unit = pp.preprocess(Path::new("tests/ifendif.h"))?;
+        print!("{:#?}", unit);
+        Ok(())
+    }
+
+    #[test]
+    fn ifelse() -> Result<(), KrangError> {
+        let pp = Preprocessor::new();
+        let unit = pp.preprocess(Path::new("tests/ifelse.h"))?;
         print!("{:#?}", unit);
         Ok(())
     }

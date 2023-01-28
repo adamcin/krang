@@ -9,6 +9,7 @@ pub(crate) mod expression;
 pub(crate) mod file;
 pub(crate) mod id;
 pub(crate) mod keyword;
+pub(crate) mod ppgroup;
 pub(crate) mod ppif;
 pub(crate) mod ppinclude;
 pub(crate) mod ppmacro;

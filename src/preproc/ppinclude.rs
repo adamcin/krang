@@ -1,5 +1,5 @@
 use super::{
-    directive::PPGroup,
+    ppgroup::PPGroup,
     pptoken::{HChar, PPToken, PPTokens, QChar},
     preprocessor::PPAble,
 };

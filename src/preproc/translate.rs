@@ -1,6 +1,6 @@
 use super::{
-    directive::PPGroup,
     file::{PPFile, PPFileRef},
+    ppgroup::PPGroup,
 };
 
 pub struct Translator {}

@@ -10,11 +10,7 @@ use crate::{
     common::err_invalid_input, error::KrangError, parse::*, scan::Loc, source::file::SourceFile,
 };
 
-use super::{
-    directive::PPGroup,
-    ppinclude::PPInclude,
-    pptoken::{trace_parse_errors, HChar, PPLine, PPLineStream, PPToken, PPTokenStream, QChar},
-};
+use super::{directive::*, ppgroup::*, ppinclude::PPInclude, pptoken::*};
 
 /// Represents a file that been preprocessed to level 3.
 #[derive(Debug)]
@@ -95,13 +91,19 @@ pub trait PathCalculator<'a> {
 }
 
 #[derive(Debug)]
-struct PPFileCalculator {}
+pub struct PPFileCalculator {}
+impl PPFileCalculator {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
 impl<'a> PathCalculator<'a> for PPFileCalculator {
     type Output = Rc<PPFile>;
     fn calculate(&self, path: &Path) -> Result<Self::Output, KrangError> {
         let source = SourceFile::open(path).map_err(KrangError::IOError)?;
         let stream = PPTokenStream::new(source)?;
         let lines = PPLineStream::new(stream)?;
+        println!("{:?}", lines);
         PPFile::new(lines).map(Rc::new)
     }
 }
@@ -178,10 +180,16 @@ impl<'a> FileManager {
         for ipath in self.ipaths.iter() {
             let i_as_path = Path::new(ipath);
             let mut buf = PathBuf::new();
-            buf.push(i_as_path);
+            if !i_as_path.has_root() {
+                buf.push(i_as_path.canonicalize().map_err(KrangError::IOError)?)
+            } else {
+                buf.push(i_as_path);
+            }
             buf.push(h_as_path);
-            if let Ok(fileRef) = self.get(&buf) {
-                return Ok(fileRef);
+            if let Ok(file_ref) = self.get(&buf) {
+                return Ok(file_ref);
+            } else {
+                println!("{}", buf.display());
             }
         }
         Err(KrangError::IOError(err_invalid_input(format!(
@@ -216,14 +224,14 @@ mod tests {
 
     #[test]
     fn stdio() -> Result<(), KrangError> {
-        let manager = FileManager::new(vec!["/usr/include".to_owned()]);
+        let manager = FileManager::new(vec!["tests".to_owned()]);
         let path = Path::new("tests/hello_world.c")
             .canonicalize()
-            .map_err(|err| KrangError::IOError(err))?;
+            .map_err(KrangError::IOError)?;
         let loc = Loc::init(Rc::new(path.display().to_string()));
-        let hname = "stdio.h".to_owned();
-        let stdio_h = manager.search_hname(&loc, &hname)?;
-        print!("{:#?}", &stdio_h);
+        let hname = "simple1.h".to_owned();
+        let simple1_h = manager.search_hname(&loc, &hname)?;
+        print!("{:#?}", &simple1_h);
         Ok(())
     }
 }

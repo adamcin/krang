@@ -153,15 +153,15 @@ where
 }
 
 /// wrap a parser with a gate that logs a message before parsing. rename to 'fail' to quickly switch to a failure mode
-pub fn free<'a, P, I: 'a + Debug, R: Debug>(p: P, msg: &'a str) -> impl Parser<'a, &'a [I], R>
+pub fn pass<'a, P, I: 'a + Debug, R: Debug>(p: P, msg: &'a str) -> impl Parser<'a, &'a [I], R>
 where
     P: Parser<'a, &'a [I], R>,
 {
     move |input: &'a [I]| {
-        println!("*** free! msg: {}, input: {:?}", msg, input.get(0));
+        println!("*** pass! msg: {}, input: {:?}", msg, input.get(0));
         let output = p.parse(input);
         println!(
-            "*** free! msg: {}, output: {}",
+            "*** pass! msg: {}, output: {}",
             msg,
             max_len(120, format!("{:?}", output))
         );
