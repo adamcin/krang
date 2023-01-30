@@ -15,9 +15,9 @@ pub enum PPDefineMatch {
 }
 
 impl<'a> Parses<'a> for PPDefineMatch {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -83,10 +83,10 @@ pub struct PPDefineReplace(pub Option<PPTokens>);
 #[derive(Debug, Clone)]
 pub struct PPIdList(Id, Vec<Id>);
 impl<'a> Parses<'a> for PPIdList {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -112,3 +112,30 @@ impl<'a> Parses<'a> for PPIdList {
         .parse(ctx, input)
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct PPDefineLine(pub PPDefineMatch, pub PPDefineReplace);
+// impl<'a> ParsesSharpLine<'a> for PPDefineLine {
+//     fn parse_sharp(
+//         sharp: &Loc,
+//         directive: PPDirective,
+//         input: &'a [PPToken],
+//     ) -> ParseResult<'a, &'a [PPToken], PPLine> {
+//         match directive {
+//             PPDirective::Define => map(
+//                 pair(
+//                     PPDefineMatch::parse_into,
+//                     left(ok(PPTokens::parse_into), match_next!(PPToken::LineEnd)),
+//                 ),
+//                 |(def_match, def_replace)| {
+//                     PPLine::Define(sharp.clone(), Self(def_match, PPDefineReplace(def_replace)))
+//                 },
+//             )
+//             .parse(input),
+//             _ => none("").parse(input),
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct PPUndefLine(pub Id);

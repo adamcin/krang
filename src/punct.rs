@@ -317,18 +317,18 @@ impl Punctuator {
     }
 }
 
-impl<'a> Parser<'a, &'a [Ch], Punctuator, bool> for Punctuator {
+impl<'a> Parser<'a, &'a [Ch], Punctuator, Rc<bool>> for Punctuator {
     fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Punctuator> {
         map(match_literal(self.as_str()), |()| *self).parse(ctx, input)
     }
 }
 
 impl<'a> Parses<'a> for Punctuator {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
 
     fn parse_into(
-        ctx: Rc<Self::Context>,
+        ctx: Self::Context,
         input: Self::Input,
     ) -> crate::parse::ParseResult<'a, Self::Input, Self>
     where

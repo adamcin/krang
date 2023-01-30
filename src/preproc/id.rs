@@ -51,12 +51,9 @@ impl From<&str> for Id {
 }
 
 impl<'a> Parses<'a> for Id {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(
-        ctx: Rc<Self::Context>,
-        input: Self::Input,
-    ) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         msg(
             map(
                 map(

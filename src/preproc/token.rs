@@ -32,12 +32,9 @@ impl IntConst {
     }
 }
 impl<'a> Parses<'a> for IntConst {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(
-        ctx: Rc<Self::Context>,
-        input: Self::Input,
-    ) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         and_then(
             map(range(1.., digit_char()), |chars| -> String {
                 chars.into_iter().collect()
@@ -90,12 +87,9 @@ impl StringConst {
     }
 }
 impl<'a> Parses<'a> for StringConst {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(
-        ctx: Rc<Self::Context>,
-        input: Self::Input,
-    ) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
         map(
             right(
                 match_literal("\""),

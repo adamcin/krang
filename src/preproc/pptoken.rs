@@ -90,7 +90,7 @@ impl<'a> PPToken {
         }
     }
     pub fn parse_id(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(Id::parse_into, |value, i| {
@@ -100,7 +100,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_num(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(PPNum::parse_into, |value, i| {
@@ -110,7 +110,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_hchars(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
@@ -124,7 +124,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_cchars(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
@@ -138,7 +138,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_qchars(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
@@ -152,7 +152,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_schars(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
@@ -166,7 +166,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_punct(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(Punctuator::parse_into, |punct, i| {
@@ -176,7 +176,7 @@ impl<'a> PPToken {
     }
 
     pub fn parse_other(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map(nonwsp(), |ch| Self::Other(ch.clone())).parse(ctx, input)
@@ -214,10 +214,10 @@ impl<'a> PPToken {
 }
 
 impl<'a> Parses<'a> for PPToken {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -377,16 +377,16 @@ impl SimpleEsc {
     }
 }
 
-impl<'a> Parser<'a, &'a [Ch], SimpleEsc, bool> for SimpleEsc {
+impl<'a> Parser<'a, &'a [Ch], SimpleEsc, Rc<bool>> for SimpleEsc {
     fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], SimpleEsc> {
         map(pred(any_char, |&ch| ch == self.as_esc_char()), |_| *self).parse(ctx, input)
     }
 }
 
 impl<'a> Parses<'a> for SimpleEsc {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -430,9 +430,9 @@ impl CEsc {
 }
 
 impl<'a> Parses<'a> for CEsc {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -512,9 +512,9 @@ impl Ucn {
 }
 
 impl<'a> Parses<'a> for Ucn {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -556,9 +556,9 @@ pub enum CChar {
 }
 
 impl<'a> Parses<'a> for CChar {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -576,9 +576,9 @@ impl<'a> Parses<'a> for CChar {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HChar(Ch);
 impl<'a> Parses<'a> for HChar {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -601,7 +601,7 @@ impl HChar {
         String::from_iter(chars.iter().map(|ch| ch.as_char()))
     }
     pub fn reparse<'a>(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         loc: Loc,
         hchars: &[Ch],
     ) -> Result<PPToken, String> {
@@ -617,9 +617,9 @@ impl HChar {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QChar(Ch);
 impl<'a> Parses<'a> for QChar {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -642,7 +642,7 @@ impl QChar {
         String::from_iter(chars.iter().map(|ch| ch.as_char()))
     }
     pub fn reparse<'a>(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         loc: Loc,
         qchars: &[Ch],
     ) -> Result<PPToken, String> {
@@ -667,9 +667,9 @@ pub enum CEncoding {
     Char32,
 }
 impl<'a> Parses<'a> for CEncoding {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -701,9 +701,9 @@ pub enum SEncoding {
     Char32,
 }
 impl<'a> Parses<'a> for SEncoding {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -742,9 +742,9 @@ impl SChar {
 }
 
 impl<'a> Parses<'a> for SChar {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -762,9 +762,9 @@ impl<'a> Parses<'a> for SChar {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PPNum(pub String);
 impl<'a> Parses<'a> for PPNum {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -835,10 +835,10 @@ impl<'a> PPTokens {
 }
 
 impl<'a> Parses<'a> for PPTokens {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {

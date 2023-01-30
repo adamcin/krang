@@ -1,4 +1,4 @@
-use std::{fmt::Debug, ops::RangeBounds, rc::Rc};
+use std::{fmt::Debug, ops::RangeBounds};
 
 use log;
 
@@ -28,27 +28,28 @@ macro_rules! not_next {
         })
     };
 }
+
 pub type ParseError<Input> = (String, Input);
 pub type ParseResult<'a, Input, Output> =
     Result<(Input, Output), (ParseError<Input>, Vec<ParseError<Input>>)>;
 
 pub trait Parser<'a, Input, Output, Context> {
-    fn parse(&self, ctx: Rc<Context>, input: Input) -> ParseResult<'a, Input, Output>;
+    fn parse(&self, ctx: Context, input: Input) -> ParseResult<'a, Input, Output>;
 }
 
 pub trait Parses<'a>: Sized {
     type Context;
     type Input;
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a;
 }
 
 impl<'a, F, Input, Output, Context> Parser<'a, Input, Output, Context> for F
 where
-    F: Fn(Rc<Context>, Input) -> ParseResult<'a, Input, Output>,
+    F: Fn(Context, Input) -> ParseResult<'a, Input, Output>,
 {
-    fn parse(&self, ctx: Rc<Context>, input: Input) -> ParseResult<'a, Input, Output> {
+    fn parse(&self, ctx: Context, input: Input) -> ParseResult<'a, Input, Output> {
         self(ctx, input)
     }
 }
@@ -116,7 +117,7 @@ where
     }
 }
 
-pub fn pair<'a, P1, P2, I: 'a + ?Sized, R1, R2, C>(
+pub fn pair<'a, P1, P2, I: 'a + ?Sized, R1, R2, C: Clone>(
     left: P1,
     right: P2,
 ) -> impl Parser<'a, &'a I, (R1, R2), C>
@@ -124,7 +125,7 @@ where
     P1: Parser<'a, &'a I, R1, C>,
     P2: Parser<'a, &'a I, R2, C>,
 {
-    move |ctx: Rc<C>, input| {
+    move |ctx: C, input| {
         left.parse(ctx.clone(), input)
             .and_then(|(next_input, result1)| {
                 right
@@ -184,12 +185,15 @@ fn max_len(max: usize, s: String) -> String {
     }
 }
 
-pub fn max<'a, P1, P2, I: 'a + Debug, R: Debug, C>(p1: P1, p2: P2) -> impl Parser<'a, &'a [I], R, C>
+pub fn max<'a, P1, P2, I: 'a + Debug, R: Debug, C: Clone>(
+    p1: P1,
+    p2: P2,
+) -> impl Parser<'a, &'a [I], R, C>
 where
     P1: Parser<'a, &'a [I], R, C>,
     P2: Parser<'a, &'a [I], R, C>,
 {
-    move |ctx: Rc<C>, input| match (p1.parse(ctx.clone(), input), p2.parse(ctx, input)) {
+    move |ctx: C, input| match (p1.parse(ctx.clone(), input), p2.parse(ctx, input)) {
         (Ok((rem1, res1)), Ok((rem2, res2))) => {
             if rem2.len() < rem1.len() {
                 Ok((rem2, res2))
@@ -209,12 +213,15 @@ pub fn single<'a, I: 'a, C>() -> impl Parser<'a, &'a [I], &'a I, C> {
     }
 }
 
-pub fn or_else<'a, P1, P2, I: Debug, R: Debug, C>(p: P1, elze: P2) -> impl Parser<'a, I, R, C>
+pub fn or_else<'a, P1, P2, I: Debug, R: Debug, C: Clone>(
+    p: P1,
+    elze: P2,
+) -> impl Parser<'a, I, R, C>
 where
     P1: Parser<'a, I, R, C>,
     P2: Parser<'a, I, R, C>,
 {
-    move |ctx: Rc<C>, input| {
+    move |ctx: C, input| {
         p.parse(ctx.clone(), input)
             .or_else(|((_, input), _)| elze.parse(ctx, input))
     }
@@ -224,7 +231,10 @@ pub fn none<'a, I, R, C>(msg: &'a str) -> impl Parser<'a, I, R, C> {
     move |ctx, input| Err(((msg.to_owned(), input), Vec::new()))
 }
 
-pub fn left<'a, P1, P2, I: 'a + ?Sized, R1, R2, C>(left: P1, r: P2) -> impl Parser<'a, &'a I, R1, C>
+pub fn left<'a, P1, P2, I: 'a + ?Sized, R1, R2, C: Clone>(
+    left: P1,
+    r: P2,
+) -> impl Parser<'a, &'a I, R1, C>
 where
     P1: Parser<'a, &'a I, R1, C>,
     P2: Parser<'a, &'a I, R2, C>,
@@ -232,7 +242,7 @@ where
     map(pair(left, r), |(left, _right)| left)
 }
 
-pub fn right<'a, P1, P2, I: 'a + ?Sized, R1, R2, C>(
+pub fn right<'a, P1, P2, I: 'a + ?Sized, R1, R2, C: Clone>(
     l: P1,
     right: P2,
 ) -> impl Parser<'a, &'a I, R2, C>
@@ -258,7 +268,7 @@ where
     }
 }
 
-pub fn range<'a, P, I: 'a + ?Sized, A: Debug, B, C>(
+pub fn range<'a, P, I: 'a + ?Sized, A: Debug, B, C: Clone>(
     bounds: B,
     p: P,
 ) -> impl Parser<'a, &'a I, Vec<A>, C>
@@ -266,7 +276,7 @@ where
     B: RangeBounds<usize> + Debug,
     P: Parser<'a, &'a I, A, C>,
 {
-    move |ctx: Rc<C>, mut input| {
+    move |ctx: C, mut input| {
         let mut result = Vec::new();
 
         while let Ok((next_input, next_item)) = p.parse(ctx.clone(), input) {
@@ -298,14 +308,18 @@ where
     }
 }
 
-pub fn zero_or_more<'a, P, I: 'a + ?Sized, A: Debug, C>(p: P) -> impl Parser<'a, &'a I, Vec<A>, C>
+pub fn zero_or_more<'a, P, I: 'a + ?Sized, A: Debug, C: Clone>(
+    p: P,
+) -> impl Parser<'a, &'a I, Vec<A>, C>
 where
     P: Parser<'a, &'a I, A, C>,
 {
     range(0.., p)
 }
 
-pub fn one_or_more<'a, P, I: 'a + ?Sized, A: Debug, C>(p: P) -> impl Parser<'a, &'a I, Vec<A>, C>
+pub fn one_or_more<'a, P, I: 'a + ?Sized, A: Debug, C: Clone>(
+    p: P,
+) -> impl Parser<'a, &'a I, Vec<A>, C>
 where
     P: Parser<'a, &'a I, A, C>,
 {

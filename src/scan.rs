@@ -156,7 +156,7 @@ impl<'a> TryingIterator for ChIter<'a> {
 pub type Atom = Ch;
 pub type Atoms = [Atom];
 
-pub fn until<'a, 'u, P, A, B, C>(
+pub fn until<'a, 'u, P, A, B, C: Clone>(
     p: P,
     bounds: B,
     until: &'u str,
@@ -167,7 +167,7 @@ where
     'u: 'a,
 {
     let parser = right(not(match_literal(until)), p);
-    move |ctx: Rc<C>, mut input| {
+    move |ctx: C, mut input| {
         let mut result = Vec::new();
 
         while let Ok((next_input, next_item)) = parser.parse(ctx.clone(), input) {
@@ -189,7 +189,7 @@ where
     }
 }
 
-pub fn peek<'a, A, F, P, C>(
+pub fn peek<'a, A, F, P, C: Clone>(
     count: usize,
     pred: F,
     opt_p: P,
@@ -198,7 +198,7 @@ where
     F: Parser<'a, &'a [Ch], bool, C>,
     P: Parser<'a, &'a [Ch], A, C>,
 {
-    move |ctx: Rc<C>, input: &'a Atoms| match pred
+    move |ctx: C, input: &'a Atoms| match pred
         .parse(ctx.clone(), &input[0..count.min(input.len())])
         .ok()
     {
@@ -219,7 +219,7 @@ where
     }
 }
 
-pub fn any_char<'a, C>(ctx: Rc<C>, input: &'a [Ch]) -> ParseResult<&'a [Ch], char> {
+pub fn any_char<'a, C>(ctx: C, input: &'a [Ch]) -> ParseResult<&'a [Ch], char> {
     msg(
         map(single(), |atom: &Atom| atom.chat()),
         "any_char not matched",
@@ -259,19 +259,19 @@ pub fn non_nl_char<'a, C>() -> impl Parser<'a, &'a [Ch], char, C> {
     )
 }
 
-pub fn space1<'a, C>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
+pub fn space1<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
     one_or_more(whitespace_atom())
 }
 
-pub fn space0<'a, C>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
+pub fn space0<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
     zero_or_more(whitespace_atom())
 }
 
-pub fn pad1<'a, C>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
+pub fn pad1<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
     one_or_more(inlinespace_atom())
 }
 
-pub fn pad0<'a, C>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
+pub fn pad0<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], Vec<&'a Ch>, C> {
     zero_or_more(inlinespace_atom())
 }
 
@@ -282,14 +282,14 @@ pub fn digit_char<'a, C>() -> impl Parser<'a, &'a [Ch], char, C> {
     )
 }
 
-pub fn newline<'a, C>() -> impl Parser<'a, &'a [Ch], (), C> {
+pub fn newline<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], (), C> {
     msg(
         or_else(match_literal("\r\n"), match_literal("\n")),
         "newline not matched",
     )
 }
 
-pub fn non_nl0<'a, C>() -> impl Parser<'a, &'a [Ch], Vec<char>, C> {
+pub fn non_nl0<'a, C: Clone>() -> impl Parser<'a, &'a [Ch], Vec<char>, C> {
     zero_or_more(non_nl_char())
 }
 

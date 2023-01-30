@@ -167,7 +167,7 @@ impl Keyword {
     // }
 }
 
-impl<'a> Parser<'a, &'a [Ch], Keyword, bool> for Keyword {
+impl<'a> Parser<'a, &'a [Ch], Keyword, Rc<bool>> for Keyword {
     fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Keyword> {
         map(match_literal(self.as_str()), |()| *self).parse(ctx, input)
     }
@@ -183,9 +183,9 @@ impl<'a> Parser<'a, &'a [Ch], Keyword, bool> for Keyword {
 // }
 
 impl<'a> Parses<'a> for Keyword {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [Ch];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {

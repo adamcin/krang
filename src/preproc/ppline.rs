@@ -5,11 +5,12 @@ use crate::{error::KrangError, parse::*, punct::Punctuator, scan::*};
 use super::{
     expression::PPExpression,
     id::Id,
+    ppcontext::PPContext,
     ppif::*,
     ppinclude::PPInclude,
     ppmacro::{PPDefineMatch, PPDefineReplace},
     pptoken::*,
-    preprocessor::{PPAble, PPContext},
+    preprocessor::PPAble,
 };
 
 #[derive(Debug, Clone)]
@@ -74,9 +75,9 @@ impl PPDirective {
 }
 
 impl<'a> Parses<'a> for PPDirective {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -84,41 +85,6 @@ impl<'a> Parses<'a> for PPDirective {
             .parse(ctx, input)
     }
 }
-
-trait ParsesSharpLine<'a> {
-    fn parse_sharp(
-        sharp: &Loc,
-        directive: PPDirective,
-        input: &'a [PPToken],
-    ) -> ParseResult<'a, &'a [PPToken], PPLine>;
-}
-
-#[derive(Debug, Clone)]
-pub struct PPDefineLine(pub PPDefineMatch, pub PPDefineReplace);
-// impl<'a> ParsesSharpLine<'a> for PPDefineLine {
-//     fn parse_sharp(
-//         sharp: &Loc,
-//         directive: PPDirective,
-//         input: &'a [PPToken],
-//     ) -> ParseResult<'a, &'a [PPToken], PPLine> {
-//         match directive {
-//             PPDirective::Define => map(
-//                 pair(
-//                     PPDefineMatch::parse_into,
-//                     left(ok(PPTokens::parse_into), match_next!(PPToken::LineEnd)),
-//                 ),
-//                 |(def_match, def_replace)| {
-//                     PPLine::Define(sharp.clone(), Self(def_match, PPDefineReplace(def_replace)))
-//                 },
-//             )
-//             .parse(input),
-//             _ => none("").parse(input),
-//         }
-//     }
-// }
-
-#[derive(Debug, Clone)]
-pub struct PPUndefLine(pub Id);
 
 #[derive(Debug, Clone)]
 pub struct PPErrorLine(pub Option<PPTokens>);
@@ -131,9 +97,9 @@ pub enum PPOnOffSwitch {
 }
 
 impl<'a> Parses<'a> for PPOnOffSwitch {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -296,9 +262,9 @@ impl PPLine {
     }
 }
 impl<'a> Parses<'a> for PPLine {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPToken];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {

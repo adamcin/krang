@@ -3,12 +3,8 @@ use std::rc::Rc;
 use crate::{error::KrangError, parse::*, scan::Loc};
 
 use super::{
-    expression::PPExpression,
-    id::Id,
-    ppgroup::*,
-    ppline::*,
-    pptoken::*,
-    preprocessor::{PPAble, PPContext},
+    expression::PPExpression, id::Id, ppcontext::PPContext, ppgroup::*, ppline::*, pptoken::*,
+    preprocessor::PPAble,
 };
 
 #[derive(Debug, Clone)]
@@ -33,9 +29,9 @@ impl<'a> PPIf {
     }
 }
 impl<'a> Parses<'a> for PPIf {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -61,10 +57,10 @@ impl PPAble for PPIf {}
 #[derive(Debug, Clone)]
 pub struct PPElIf(pub PPElIfLine, pub Box<Option<PPGroup>>);
 impl<'a> Parses<'a> for PPElIf {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -98,10 +94,10 @@ impl PPAble for PPElIf {}
 #[derive(Debug, Clone)]
 pub struct PPElse(pub Loc, Box<Option<PPGroup>>);
 impl<'a> Parses<'a> for PPElse {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -168,9 +164,9 @@ impl<'a> PPElIfLine {
     }
 }
 impl<'a> Parses<'a> for PPElIfLine {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -188,9 +184,9 @@ impl<'a> PPElseLine {
     }
 }
 impl<'a> Parses<'a> for PPElseLine {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -208,9 +204,9 @@ impl<'a> PPEndIf {
     }
 }
 impl<'a> Parses<'a> for PPEndIf {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {

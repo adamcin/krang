@@ -2,8 +2,8 @@ use crate::error::KrangError;
 
 use super::{
     id::Id,
+    ppcontext::PPContext,
     pptoken::{PPToken, PPTokens},
-    preprocessor::PPContext,
 };
 
 /// constant-expression:

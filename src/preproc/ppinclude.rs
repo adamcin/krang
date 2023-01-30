@@ -1,4 +1,5 @@
 use super::{
+    ppcontext::PPContext,
     ppgroup::PPGroup,
     pptoken::{HChar, PPToken, PPTokens, QChar},
     preprocessor::PPAble,
@@ -27,7 +28,7 @@ impl PPInclude {
 }
 
 impl PPAble for PPInclude {
-    fn pass(&self, ctx: &super::preprocessor::PPContext) -> Result<Self, crate::error::KrangError> {
+    fn pass(&self, ctx: &PPContext) -> Result<Self, crate::error::KrangError> {
         // TODO handle Unparsed
         Ok(self.clone())
     }

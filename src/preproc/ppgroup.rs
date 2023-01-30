@@ -3,13 +3,8 @@ use std::{fmt::Debug, rc::Rc};
 use crate::{error::KrangError, parse::*, punct::Punctuator, scan::*};
 
 use super::{
-    id::Id,
-    ppif::*,
-    ppinclude::PPInclude,
-    ppline::*,
-    ppmacro::{PPDefineMatch, PPDefineReplace},
-    pptoken::*,
-    preprocessor::{PPAble, PPContext},
+    id::Id, ppcontext::PPContext, ppif::*, ppinclude::PPInclude, ppline::*, ppmacro::*, pptoken::*,
+    preprocessor::PPAble,
 };
 
 #[derive(Debug, Clone)]
@@ -30,10 +25,10 @@ impl PPAble for PPGroup {
 }
 
 impl<'a> Parses<'a> for PPGroup {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
 
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -64,7 +59,7 @@ pub enum PPGroupPart {
 
 impl<'a> PPGroupPart {
     pub fn parse_if_section(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map(
@@ -83,7 +78,7 @@ impl<'a> PPGroupPart {
     }
 
     pub fn parse_control_line(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map(PPControlLine::parse_into, |dir| {
@@ -93,7 +88,7 @@ impl<'a> PPGroupPart {
     }
 
     pub fn parse_text_line(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         or_else(
@@ -104,19 +99,16 @@ impl<'a> PPGroupPart {
     }
 
     pub fn parse_non_directive(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: <Self as Parses<'a>>::Input,
     ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         parse_next!(sharp@PPLine::Sharp(PPDirective::Unknown(id), _, tokens) => Self::NonDirective(tokens.loc().clone(), tokens.clone()), "#<non> not parsed").parse(ctx, input)
     }
 }
 impl<'a> Parses<'a> for PPGroupPart {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
-        input: Self::Input,
-    ) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -193,49 +185,49 @@ impl<'a> PPControlLine {
     }
 
     fn parse_include(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Include, lead, ..) => Self::Include(lead.loc().clone()), "#include not parsed").parse(ctx, input)
     }
 
     fn parse_define(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Define, lead, ..) => Self::Define(lead.loc().clone()), "#define not parsed").parse(ctx, input)
     }
 
     fn parse_undef(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Undef, lead, ..) => Self::Undef(lead.loc().clone()), "#undef not parsed").parse(ctx, input)
     }
 
     fn parse_sharp_line(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Line, lead, ..) => Self::Line(lead.loc().clone()), "#line not parsed").parse(ctx, input)
     }
 
     fn parse_sharp_error(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Error, lead, ..) => Self::Error(lead.loc().clone()), "#error not parsed").parse(ctx, input)
     }
 
     fn parse_pragma(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::Sharp(PPDirective::Pragma, lead, tokens) => Self::Pragma(lead.loc().clone(), PPPragmaForm::Tokens(Some(tokens.clone()))), "#pragma not parsed").parse(ctx, input)
     }
 
     fn parse_sharp_null(
-        ctx: Rc<<Self as Parses<'a>>::Context>,
+        ctx: <Self as Parses<'a>>::Context,
         input: &'a [PPLine],
     ) -> ParseResult<'a, &'a [PPLine], Self> {
         parse_next!(PPLine::SharpNull(lead, ..) => Self::Null(lead.loc().clone()), "#<null> not parsed")
@@ -244,9 +236,9 @@ impl<'a> PPControlLine {
 }
 
 impl<'a> Parses<'a> for PPControlLine {
-    type Context = bool;
+    type Context = Rc<bool>;
     type Input = &'a [PPLine];
-    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Self::Context, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
