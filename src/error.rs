@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug)]
 pub enum KrangError {
     IOError(Error),
-    ParseError(Vec<(Option<Loc>, String)>),
+    ParseError((Option<Loc>, String)),
     /// error produced by processing an #error pp directive
     ErrorDirective(Loc, Option<PPTokens>),
     PPUnrecognizedId(Loc, Id),

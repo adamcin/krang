@@ -260,19 +260,12 @@ impl<'a> Parses<'a> for PPToken {
 
 pub fn trace_parse_errors<'a, 'f, F, Atom>(
     mapper: F,
-) -> impl Fn(((String, &[Atom]), Vec<(String, &[Atom])>)) -> Vec<(Option<Loc>, String)>
+) -> impl Fn((String, &[Atom])) -> (Option<Loc>, String)
 where
     F: Fn(&Atom) -> Option<Loc> + 'f,
     'f: 'a,
 {
-    move |(head, tail)| {
-        let combined = vec![vec![head], tail].concat();
-        combined
-            .into_iter()
-            .rev()
-            .map(|(err, input)| (input.get(0).and_then(&mapper), err))
-            .collect()
-    }
+    move |(err, input)| (input.get(0).and_then(&mapper), err)
 }
 
 #[derive(Clone, Debug)]
@@ -608,7 +601,7 @@ impl HChar {
         let input: Vec<Ch> = hchars.to_vec();
         let result = match range(0.., SChar::parse_into).parse(ctx, &input) {
             Ok((_, res)) => Ok(PPToken::SChars(loc, SEncoding::Char, res)),
-            Err(((msg, _), _)) => Err(msg),
+            Err((msg, _)) => Err(msg),
         };
         result
     }
@@ -649,7 +642,7 @@ impl QChar {
         let input: Vec<Ch> = qchars.to_vec();
         let result = match range(0.., SChar::parse_into).parse(ctx, &input) {
             Ok((_, res)) => Ok(PPToken::SChars(loc, SEncoding::Char, res)),
-            Err(((msg, _), _)) => Err(msg),
+            Err((msg, _)) => Err(msg),
         };
         result
     }

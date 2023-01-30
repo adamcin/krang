@@ -30,8 +30,7 @@ macro_rules! not_next {
 }
 
 pub type ParseError<Input> = (String, Input);
-pub type ParseResult<'a, Input, Output> =
-    Result<(Input, Output), (ParseError<Input>, Vec<ParseError<Input>>)>;
+pub type ParseResult<'a, Input, Output> = Result<(Input, Output), ParseError<Input>>;
 
 pub trait Parser<'a, Input, Output, Context> {
     fn parse(&self, ctx: Context, input: Input) -> ParseResult<'a, Input, Output>;
@@ -85,7 +84,7 @@ where
         p.parse(ctx, input)
             .and_then(|(next_input, result)| match map_fn(result) {
                 Ok(result) => Ok((next_input, result)),
-                Err(msg) => Err(((msg, input), Vec::new())),
+                Err(msg) => Err((msg, input)),
             })
     }
 }
@@ -102,7 +101,7 @@ where
         p.parse(ctx, input)
             .and_then(|(next_input, result)| match map_fn(result, input) {
                 Ok(result) => Ok((next_input, result)),
-                Err(msg) => Err(((msg, input), Vec::new())),
+                Err(msg) => Err((msg, input)),
             })
     }
 }
@@ -113,7 +112,7 @@ where
 {
     move |ctx, input| {
         p.parse(ctx, input)
-            .map_err(|((orig, err_in), prev)| ((msg.to_owned(), err_in), prev))
+            .map_err(|(orig, err_in)| (msg.to_owned(), err_in))
     }
 }
 
@@ -130,10 +129,7 @@ where
             .and_then(|(next_input, result1)| {
                 right
                     .parse(ctx, next_input)
-                    .map_err(|((msg, nested), prev)| {
-                        let msg2 = msg.as_str().to_owned();
-                        ((msg, input), vec![vec![(msg2, nested)], prev].concat())
-                    })
+                    .map_err(|(msg, _)| (msg, input))
                     .map(|(last_input, result2)| (last_input, (result1, result2)))
             })
     }
@@ -156,7 +152,7 @@ where
 {
     move |ctx, input| {
         log::debug!("*** fail! msg: {}, input: {:?}", msg, input);
-        Err(((format!("fail: {}", msg), input), Vec::new()))
+        Err((format!("fail: {}", msg), input))
     }
 }
 
@@ -209,7 +205,7 @@ where
 pub fn single<'a, I: 'a, C>() -> impl Parser<'a, &'a [I], &'a I, C> {
     move |ctx, input: &'a [I]| match input.iter().next() {
         Some(elem) => Ok((&input[1..], elem)),
-        None => Err((("single not matched".to_owned(), input), Vec::new())),
+        None => Err(("single not matched".to_owned(), input)),
     }
 }
 
@@ -223,12 +219,12 @@ where
 {
     move |ctx: C, input| {
         p.parse(ctx.clone(), input)
-            .or_else(|((_, input), _)| elze.parse(ctx, input))
+            .or_else(|(_, input)| elze.parse(ctx, input))
     }
 }
 
 pub fn none<'a, I, R, C>(msg: &'a str) -> impl Parser<'a, I, R, C> {
-    move |ctx, input| Err(((msg.to_owned(), input), Vec::new()))
+    move |ctx, input| Err((msg.to_owned(), input))
 }
 
 pub fn left<'a, P1, P2, I: 'a + ?Sized, R1, R2, C: Clone>(
@@ -264,7 +260,7 @@ where
                 return Ok((next_input, value));
             }
         }
-        Err((("pred not matched".to_owned(), input), Vec::new()))
+        Err(("pred not matched".to_owned(), input))
     }
 }
 
@@ -290,10 +286,7 @@ where
         if bounds.contains(&result.len()) {
             Ok((input, result))
         } else {
-            Err((
-                (format!("range not matched. bounds {:?}", bounds), input),
-                Vec::new(),
-            ))
+            Err((format!("range not matched. bounds {:?}", bounds), input))
         }
     }
 }
@@ -303,7 +296,7 @@ where
     P: Parser<'a, &'a I, A, C>,
 {
     move |ctx, input| match p.parse(ctx, input) {
-        Ok(_) => Err((("matched. not!".to_owned(), input), Vec::new())),
+        Ok(_) => Err(("matched. not!".to_owned(), input)),
         Err(..) => Ok((input, ())),
     }
 }

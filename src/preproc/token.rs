@@ -121,14 +121,14 @@ impl Token {
     pub fn key(input: &[Self], filter: Keyword) -> ParseResult<'_, &[Self], Keyword> {
         match input.split_first() {
             Some((Self::Keyword(loc, value), rem)) if value == &filter => Ok((rem, *value)),
-            _ => Err((("Token.key not matched".to_owned(), input), Vec::new())),
+            _ => Err(("Token.key not matched".to_owned(), input)),
         }
     }
 
     pub fn id(input: &[Self]) -> ParseResult<'_, &[Self], Id> {
         match input.split_first() {
             Some((Self::Identifier(loc, value), rem)) => Ok((rem, value.copy())),
-            _ => Err((("Token.id not matched".to_owned(), input), Vec::new())),
+            _ => Err(("Token.id not matched".to_owned(), input)),
         }
     }
 }

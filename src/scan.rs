@@ -179,11 +179,8 @@ where
             Ok((input, result))
         } else {
             Err((
-                (
-                    format!("until '{until}' not matched in bounds {:?}", bounds),
-                    input,
-                ),
-                Vec::new(),
+                format!("until '{until}' not matched in bounds {:?}", bounds),
+                input,
             ))
         }
     }
@@ -215,7 +212,7 @@ where
 {
     move |ctx, input: &'a Atoms| match input.get(0..expected.len()) {
         Some(next) if Atom::as_string(next) == expected => Ok((&input[expected.len()..], ())),
-        _ => Err(((format!("match_literal not matched"), input), Vec::new())),
+        _ => Err((format!("match_literal not matched"), input)),
     }
 }
 
@@ -316,10 +313,7 @@ mod test {
             parse_joe.parse(Rc::new(true), hello_joe_and_robert.stream())
         );
         assert_eq!(
-            Err((
-                ("match_literal not matched".to_owned(), hello_mike.stream()),
-                Vec::new()
-            )),
+            Err(("match_literal not matched".to_owned(), hello_mike.stream())),
             parse_joe.parse(Rc::new(true), hello_mike.stream())
         );
         Ok(())
@@ -335,10 +329,7 @@ mod test {
             parse_digit.parse(Rc::new(true), numlet.stream())
         );
         assert_eq!(
-            Err((
-                ("digit_char not matched".to_owned(), letters.stream()),
-                Vec::new()
-            )),
+            Err(("digit_char not matched".to_owned(), letters.stream())),
             parse_digit.parse(Rc::new(true), letters.stream())
         );
         Ok(())
@@ -354,10 +345,7 @@ mod test {
             parse_wsp.parse(Rc::new(true), wsplet.stream())
         );
         assert_eq!(
-            Err((
-                ("whitespace_char not matched".to_owned(), letters.stream()),
-                Vec::new()
-            )),
+            Err(("whitespace_char not matched".to_owned(), letters.stream())),
             parse_wsp.parse(Rc::new(true), letters.stream())
         );
         Ok(())
@@ -378,10 +366,7 @@ mod test {
             parse_nl.parse(Rc::new(true), carret.stream())
         );
         assert_eq!(
-            Err((
-                ("newline not matched".to_owned(), letters.stream()),
-                Vec::new()
-            )),
+            Err(("newline not matched".to_owned(), letters.stream())),
             parse_nl.parse(Rc::new(true), letters.stream())
         );
         Ok(())
@@ -432,10 +417,7 @@ mod test {
             parse_peek.parse(Rc::new(true), abc.stream())
         );
         assert_eq!(
-            Err((
-                ("equal peeker not matched".to_owned(), abc_eq.stream()),
-                vec![("match_literal not matched".to_owned(), &abc_eq[1..])]
-            )),
+            Err(("equal peeker not matched".to_owned(), abc_eq.stream())),
             parse_peek.parse(Rc::new(true), abc_eq.stream())
         );
 

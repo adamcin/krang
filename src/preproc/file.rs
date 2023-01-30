@@ -147,14 +147,14 @@ impl<'a> FileManager {
                         .map_err(|herr| KrangError::Pair(Box::new((qerr, herr))))
                 })
             }
-            PPInclude::Included(..) => Err(KrangError::ParseError(vec![(
+            PPInclude::Included(..) => Err(KrangError::ParseError((
                 Some(loc.clone()),
                 format!("attempt to re-load an #include directive: {:?}", directive),
-            )])),
-            PPInclude::Unparsed(..) => Err(KrangError::ParseError(vec![(
+            ))),
+            PPInclude::Unparsed(..) => Err(KrangError::ParseError((
                 Some(loc.clone()),
                 format!("attempt to include unparsed directive: {:?}", directive),
-            )])),
+            ))),
         }
     }
 

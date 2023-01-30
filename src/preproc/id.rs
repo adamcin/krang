@@ -103,14 +103,11 @@ mod tests {
             parser.parse(Rc::new(true), my_class.stream())
         );
         assert_eq!(
-            Err((("Id not matched".to_owned(), one2345.stream()), Vec::new())),
+            Err(("Id not matched".to_owned(), one2345.stream())),
             parser.parse(Rc::new(true), one2345.stream())
         );
         assert_eq!(
-            Err((
-                ("Id not matched".to_owned(), one_class.stream()),
-                Vec::new()
-            )),
+            Err(("Id not matched".to_owned(), one_class.stream())),
             parser.parse(Rc::new(true), one_class.stream())
         );
         assert_eq!(
