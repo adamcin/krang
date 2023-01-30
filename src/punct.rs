@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{parse::*, scan::*};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,22 +317,26 @@ impl Punctuator {
     }
 }
 
-impl<'a> Parser<'a, &'a [Ch], Punctuator> for Punctuator {
-    fn parse(&self, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Punctuator> {
-        map(match_literal(self.as_str()), |()| *self).parse(input)
+impl<'a> Parser<'a, &'a [Ch], Punctuator, bool> for Punctuator {
+    fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Punctuator> {
+        map(match_literal(self.as_str()), |()| *self).parse(ctx, input)
     }
 }
 
 impl<'a> Parses<'a> for Punctuator {
+    type Context = bool;
     type Input = &'a [Ch];
 
-    fn parse_into(input: Self::Input) -> crate::parse::ParseResult<'a, Self::Input, Self>
+    fn parse_into(
+        ctx: Rc<Self::Context>,
+        input: Self::Input,
+    ) -> crate::parse::ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
         msg(
-            |inp| {
-                let init_parser: Box<dyn Parser<'a, &'a [Ch], Self>> =
+            |c, inp| {
+                let init_parser: Box<dyn Parser<'a, &'a [Ch], Self, Self::Context>> =
                     Box::new(none("unexpected error in Punctuator::parse_into"));
                 vec![
                     Self::singles(),
@@ -340,24 +346,27 @@ impl<'a> Parses<'a> for Punctuator {
                 ]
                 .concat()
                 .iter()
-                .fold(init_parser, |acc, punct| -> Box<dyn Parser<&[Ch], Self>> {
-                    Box::new(or_else(
-                        move |input| punct.parse(input),
-                        // acc on the right-hand side means [doubles, singles], [triples, doubles], [fourples, triples]
-                        move |input| acc.parse(input),
-                    ))
-                })
-                .parse(inp)
+                .fold(
+                    init_parser,
+                    |acc, punct| -> Box<dyn Parser<&[Ch], Self, Self::Context>> {
+                        Box::new(or_else(
+                            move |ctx, input| punct.parse(ctx, input),
+                            // acc on the right-hand side means [doubles, singles], [triples, doubles], [fourples, triples]
+                            move |ctx, input| acc.parse(ctx, input),
+                        ))
+                    },
+                )
+                .parse(c, inp)
             },
             "Punctuator not matched",
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::io::Error;
+    use std::{io::Error, rc::Rc};
 
     use crate::{parse::*, source::file::SourceFile};
 
@@ -386,11 +395,11 @@ mod tests {
         let parser = Punctuator::parse_into;
         assert_eq!(
             Ok((&alt_sharp[alt_sharp.len()..], Punctuator::SharpAlt2)),
-            parser.parse(alt_sharp.stream())
+            parser.parse(Rc::new(true), alt_sharp.stream())
         );
         assert_eq!(
             Ok((&alt_sharps[alt_sharps.len()..], Punctuator::SharpsAlt4)),
-            parser.parse(alt_sharps.stream())
+            parser.parse(Rc::new(true), alt_sharps.stream())
         );
         Ok(())
     }

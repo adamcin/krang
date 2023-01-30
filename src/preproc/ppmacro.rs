@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::{parse::*, punct::Punctuator};
 
 use super::{id::Id, pptoken::*};
@@ -13,8 +15,9 @@ pub enum PPDefineMatch {
 }
 
 impl<'a> Parses<'a> for PPDefineMatch {
+    type Context = bool;
     type Input = &'a [PPToken];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -31,11 +34,11 @@ impl<'a> Parses<'a> for PPDefineMatch {
                             match_next!(PPToken::Punct(_, Punctuator::LRnd)),
                         ),
                         right(
-                            ok(match_next!(PPToken::HSpace(_))),
+                            ok(match_next!(PPToken::HSpace(..))),
                             left(
                                 ok(PPIdList::parse_into),
                                 right(
-                                    ok(match_next!(PPToken::HSpace(_))),
+                                    ok(match_next!(PPToken::HSpace(..))),
                                     match_next!(PPToken::Punct(_, Punctuator::RRnd)),
                                 ),
                             ),
@@ -51,15 +54,15 @@ impl<'a> Parses<'a> for PPDefineMatch {
                         ),
                         left(
                             right(
-                                ok(match_next!(PPToken::HSpace(_))),
+                                ok(match_next!(PPToken::HSpace(..))),
                                 ok(PPIdList::parse_into),
                             ),
                             right(
-                                ok(match_next!(PPToken::HSpace(_))),
+                                ok(match_next!(PPToken::HSpace(..))),
                                 right(
                                     ok(match_next!(PPToken::Punct(_, Punctuator::Elips3))),
                                     right(
-                                        ok(match_next!(PPToken::HSpace(_))),
+                                        ok(match_next!(PPToken::HSpace(..))),
                                         match_next!(PPToken::Punct(_, Punctuator::RRnd)),
                                     ),
                                 ),
@@ -70,7 +73,7 @@ impl<'a> Parses<'a> for PPDefineMatch {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -80,9 +83,10 @@ pub struct PPDefineReplace(pub Option<PPTokens>);
 #[derive(Debug, Clone)]
 pub struct PPIdList(Id, Vec<Id>);
 impl<'a> Parses<'a> for PPIdList {
+    type Context = bool;
     type Input = &'a [PPToken];
 
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -92,11 +96,11 @@ impl<'a> Parses<'a> for PPIdList {
                 range(
                     0..,
                     right(
-                        ok(match_next!(PPToken::HSpace(_))),
+                        ok(match_next!(PPToken::HSpace(..))),
                         right(
                             match_next!(PPToken::Punct(_, Punctuator::Comma)),
                             right(
-                                ok(match_next!(PPToken::HSpace(_))),
+                                ok(match_next!(PPToken::HSpace(..))),
                                 parse_next!(PPToken::Id(_, id) => id.to_owned(), "id not parsed"),
                             ),
                         ),
@@ -105,6 +109,6 @@ impl<'a> Parses<'a> for PPIdList {
             ),
             |(head, tail)| Self(head, tail),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }

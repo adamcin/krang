@@ -33,7 +33,7 @@ impl<'a> PPFile {
     }
 
     pub fn parse(input: &'a [PPLine]) -> ParseResult<'a, &'a [PPLine], PPGroup> {
-        PPGroup::parse_into(input)
+        PPGroup::parse_into(Rc::new(true), input)
     }
 }
 

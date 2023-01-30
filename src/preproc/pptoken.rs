@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+use std::{num::ParseIntError, rc::Rc};
 
 use crate::{error::KrangError, parse::*, punct::Punctuator, scan::*, source::file::SourceFile};
 
@@ -65,11 +65,14 @@ pub enum PPToken {
     /// undefined.
     Other(Ch),
     /// A placeholder for at least one unquoted horizontal space (' ' or '\t', not '\n')
-    HSpace(Loc),
+    HSpace(Loc, String),
     /// A placeholder for a newline character or EOF
     LineEnd,
     /// A macro replacement
     Replace(Loc, PPReplacement),
+    /// Placemarker preprocessing tokens do not appear in the syntax because they are temporary entities that exist only within
+    /// translation phase 4.
+    Placemarker(Id),
 }
 
 impl<'a> PPToken {
@@ -87,26 +90,29 @@ impl<'a> PPToken {
         }
     }
     pub fn parse_id(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(Id::parse_into, |value, i| {
             Self::Id(i[0].loc().clone(), value)
         })
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_num(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(PPNum::parse_into, |value, i| {
             Self::Num(i[0].loc().clone(), value)
         })
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_hchars(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
             right(
                 match_literal("<"),
@@ -114,12 +120,13 @@ impl<'a> PPToken {
             ),
             |value, i| Self::HChars(i[0].loc().clone(), value),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_cchars(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
             pair(
                 CEncoding::parse_into,
@@ -127,12 +134,13 @@ impl<'a> PPToken {
             ),
             |(enc, value), i| Self::CChars(i[0].loc().clone(), enc, value),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_qchars(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
             right(
                 match_literal("\""),
@@ -140,12 +148,13 @@ impl<'a> PPToken {
             ),
             |value, i| Self::QChars(i[0].loc().clone(), value),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_schars(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(
             pair(
                 SEncoding::parse_into,
@@ -153,36 +162,74 @@ impl<'a> PPToken {
             ),
             |(enc, value), i| Self::SChars(i[0].loc().clone(), enc, value),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_punct(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
         map_input(Punctuator::parse_into, |punct, i| {
             Self::Punct(i[0].loc().clone(), punct)
         })
-        .parse(input)
+        .parse(ctx, input)
     }
 
     pub fn parse_other(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
         input: <Self as Parses<'a>>::Input,
-    ) -> ParseResult<'_, <Self as Parses>::Input, Self> {
-        map(nonwsp(), |ch| Self::Other(ch.clone())).parse(input)
+    ) -> ParseResult<'a, <Self as Parses<'a>>::Input, Self> {
+        map(nonwsp(), |ch| Self::Other(ch.clone())).parse(ctx, input)
+    }
+
+    pub fn paste(&self, next: &Self) -> Result<Self, String> {
+        match (self, next) {
+            (Self::Placemarker(id), Self::Placemarker(_)) => Ok(self.clone()),
+            (Self::Placemarker(_), other) | (other, Self::Placemarker(_)) => Ok(other.clone()),
+            (Self::Num(loc, PPNum(left)), Self::Num(_, PPNum(right))) => {
+                Ok(Self::Num(loc.clone(), PPNum(format!("{left}{right}"))))
+            }
+            (Self::QChars(loc, left), Self::QChars(_, right)) => Ok(Self::QChars(
+                loc.clone(),
+                vec![left.to_vec(), right.to_vec()].concat(),
+            )),
+            (Self::SChars(loc, SEncoding::Char, left), Self::SChars(_, enc, right))
+            | (Self::SChars(loc, enc, left), Self::SChars(_, SEncoding::Char, right)) => {
+                Ok(Self::SChars(
+                    loc.clone(),
+                    enc.clone(),
+                    vec![left.to_vec(), right.to_vec()].concat(),
+                ))
+            }
+            (Self::SChars(loc, enc, left), Self::SChars(_, renc, right)) if enc == renc => {
+                Ok(Self::SChars(
+                    loc.clone(),
+                    enc.clone(),
+                    vec![left.to_vec(), right.to_vec()].concat(),
+                ))
+            }
+            _ => Err(format!("incompatible tokens: {:?} + {:?}", self, next)),
+        }
     }
 }
 
 impl<'a> Parses<'a> for PPToken {
+    type Context = bool;
     type Input = &'a [Ch];
 
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
         or_else(
             or_else(
                 right(pad0(), left(map(newline(), |_| Self::LineEnd), pad0())),
-                map(pad1(), |ch| Self::HSpace(ch.first().unwrap().loc().clone())),
+                map(pad1(), |ch| {
+                    Self::HSpace(
+                        ch.first().unwrap().loc().clone(),
+                        ch.iter().map(|c| c.chat()).collect(),
+                    )
+                }),
             ),
             or_else(
                 max(
@@ -207,7 +254,7 @@ impl<'a> Parses<'a> for PPToken {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -241,13 +288,13 @@ impl<'a> PPTokenStream {
 
     pub fn new(src_file: SourceFile) -> Result<Self, KrangError> {
         let mapper = |ch: &Ch| Some(ch.loc().clone());
-        let tokens = Self::parse(src_file.stream())
+        let tokens = Self::parse(Rc::new(true), src_file.stream())
             .map(|(_, tokens)| tokens)
             .map_err(|err| KrangError::ParseError(trace_parse_errors(mapper)(err)))?;
         Ok(Self { src_file, tokens })
     }
 
-    pub fn parse(input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Vec<PPToken>> {
+    pub fn parse(ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Vec<PPToken>> {
         map(range(0.., PPToken::parse_into), |parsed| {
             if matches!(parsed.iter().last(), Some(PPToken::LineEnd)) {
                 parsed
@@ -255,7 +302,7 @@ impl<'a> PPTokenStream {
                 vec![parsed, vec![PPToken::LineEnd]].concat()
             }
         })
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -330,30 +377,34 @@ impl SimpleEsc {
     }
 }
 
-impl<'a> Parser<'a, &'a [Ch], SimpleEsc> for SimpleEsc {
-    fn parse(&self, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], SimpleEsc> {
-        map(pred(any_char, |&ch| ch == self.as_esc_char()), |_| *self).parse(input)
+impl<'a> Parser<'a, &'a [Ch], SimpleEsc, bool> for SimpleEsc {
+    fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], SimpleEsc> {
+        map(pred(any_char, |&ch| ch == self.as_esc_char()), |_| *self).parse(ctx, input)
     }
 }
 
 impl<'a> Parses<'a> for SimpleEsc {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
-        let init_parser: Box<dyn Parser<'a, &'a [Ch], Self>> =
+        let init_parser: Box<dyn Parser<'a, &'a [Ch], Self, Self::Context>> =
             Box::new(none("unexpected error in SimpleEsc::parse_into"));
 
         Self::all()
             .iter()
-            .fold(init_parser, |acc, esc| -> Box<dyn Parser<&[Ch], Self>> {
-                Box::new(or_else(
-                    move |input| esc.parse(input),
-                    move |input| acc.parse(input),
-                ))
-            })
-            .parse(input)
+            .fold(
+                init_parser,
+                |acc, esc| -> Box<dyn Parser<&[Ch], Self, Self::Context>> {
+                    Box::new(or_else(
+                        move |ctx, input| esc.parse(ctx, input),
+                        move |ctx, input| acc.parse(ctx, input),
+                    ))
+                },
+            )
+            .parse(ctx, input)
     }
 }
 
@@ -379,8 +430,9 @@ impl CEsc {
 }
 
 impl<'a> Parses<'a> for CEsc {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -414,7 +466,7 @@ impl<'a> Parses<'a> for CEsc {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -460,8 +512,9 @@ impl Ucn {
 }
 
 impl<'a> Parses<'a> for Ucn {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -492,7 +545,7 @@ impl<'a> Parses<'a> for Ucn {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -503,8 +556,9 @@ pub enum CChar {
 }
 
 impl<'a> Parses<'a> for CChar {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -515,23 +569,26 @@ impl<'a> Parses<'a> for CChar {
                 Self::Char,
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HChar(Ch);
 impl<'a> Parses<'a> for HChar {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
         map(
-            pred(single::<Ch>(), |&ch| ch.chat() != '>' && ch.chat() != '\n'),
+            pred(single::<Ch, Self::Context>(), |&ch| {
+                ch.chat() != '>' && ch.chat() != '\n'
+            }),
             |ch| Self(ch.clone()),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 impl HChar {
@@ -543,9 +600,13 @@ impl HChar {
     pub fn to_string(chars: &[Self]) -> String {
         String::from_iter(chars.iter().map(|ch| ch.as_char()))
     }
-    pub fn reparse(loc: Loc, hchars: &[Ch]) -> Result<PPToken, String> {
+    pub fn reparse<'a>(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
+        loc: Loc,
+        hchars: &[Ch],
+    ) -> Result<PPToken, String> {
         let input: Vec<Ch> = hchars.to_vec();
-        let result = match range(0.., SChar::parse_into).parse(&input) {
+        let result = match range(0.., SChar::parse_into).parse(ctx, &input) {
             Ok((_, res)) => Ok(PPToken::SChars(loc, SEncoding::Char, res)),
             Err(((msg, _), _)) => Err(msg),
         };
@@ -556,16 +617,19 @@ impl HChar {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct QChar(Ch);
 impl<'a> Parses<'a> for QChar {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
         map(
-            pred(single::<Ch>(), |&ch| ch.chat() != '\"' && ch.chat() != '\n'),
+            pred(single::<Ch, Self::Context>(), |&ch| {
+                ch.chat() != '\"' && ch.chat() != '\n'
+            }),
             |ch| Self(ch.clone()),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 impl QChar {
@@ -577,9 +641,13 @@ impl QChar {
     pub fn to_string(chars: &[Self]) -> String {
         String::from_iter(chars.iter().map(|ch| ch.as_char()))
     }
-    pub fn reparse(loc: Loc, qchars: &[Ch]) -> Result<PPToken, String> {
+    pub fn reparse<'a>(
+        ctx: Rc<<Self as Parses<'a>>::Context>,
+        loc: Loc,
+        qchars: &[Ch],
+    ) -> Result<PPToken, String> {
         let input: Vec<Ch> = qchars.to_vec();
-        let result = match range(0.., SChar::parse_into).parse(&input) {
+        let result = match range(0.., SChar::parse_into).parse(ctx, &input) {
             Ok((_, res)) => Ok(PPToken::SChars(loc, SEncoding::Char, res)),
             Err(((msg, _), _)) => Err(msg),
         };
@@ -599,8 +667,9 @@ pub enum CEncoding {
     Char32,
 }
 impl<'a> Parses<'a> for CEncoding {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -614,7 +683,7 @@ impl<'a> Parses<'a> for CEncoding {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -632,8 +701,9 @@ pub enum SEncoding {
     Char32,
 }
 impl<'a> Parses<'a> for SEncoding {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -650,7 +720,7 @@ impl<'a> Parses<'a> for SEncoding {
                 ),
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -672,8 +742,9 @@ impl SChar {
 }
 
 impl<'a> Parses<'a> for SChar {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -684,15 +755,16 @@ impl<'a> Parses<'a> for SChar {
                 Self::Char,
             ),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PPNum(pub String);
 impl<'a> Parses<'a> for PPNum {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -725,7 +797,7 @@ impl<'a> Parses<'a> for PPNum {
             ),
             |(head, tail)| Self(String::from_iter(vec![head, tail].concat().iter())),
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -754,12 +826,19 @@ impl<'a> PPTokens {
             Self(head, _) => head.loc().unwrap(),
         }
     }
+
+    pub fn as_vec(&'a self) -> Vec<&'a PPToken> {
+        match self {
+            Self(head, tail) => vec![vec![head], tail.iter().collect()].concat(),
+        }
+    }
 }
 
 impl<'a> Parses<'a> for PPTokens {
+    type Context = bool;
     type Input = &'a [PPToken];
 
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
@@ -775,7 +854,7 @@ impl<'a> Parses<'a> for PPTokens {
                 )
             },
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 

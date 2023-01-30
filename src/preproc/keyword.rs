@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use crate::{parse::*, scan::*};
 
@@ -167,9 +167,9 @@ impl Keyword {
     // }
 }
 
-impl<'a> Parser<'a, &'a [Ch], Keyword> for Keyword {
-    fn parse(&self, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Keyword> {
-        map(match_literal(self.as_str()), |()| *self).parse(input)
+impl<'a> Parser<'a, &'a [Ch], Keyword, bool> for Keyword {
+    fn parse(&self, ctx: Rc<bool>, input: &'a [Ch]) -> ParseResult<'a, &'a [Ch], Keyword> {
+        map(match_literal(self.as_str()), |()| *self).parse(ctx, input)
     }
 }
 
@@ -183,26 +183,27 @@ impl<'a> Parser<'a, &'a [Ch], Keyword> for Keyword {
 // }
 
 impl<'a> Parses<'a> for Keyword {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self>
+    fn parse_into(ctx: Rc<Self::Context>, input: Self::Input) -> ParseResult<'a, Self::Input, Self>
     where
         Self::Input: 'a,
     {
-        let init_parser: Box<dyn Parser<'a, &'a [Ch], Self>> =
+        let init_parser: Box<dyn Parser<'a, &'a [Ch], Self, Self::Context>> =
             Box::new(none("unexpected error in Keyword::parse_into"));
 
         Self::all()
             .iter()
             .fold(
                 init_parser,
-                |acc, keyword| -> Box<dyn Parser<&[Ch], Self>> {
+                |acc, keyword| -> Box<dyn Parser<&[Ch], Self, Self::Context>> {
                     Box::new(or_else(
-                        move |input| keyword.parse(input),
-                        move |input| acc.parse(input),
+                        move |ctx, input| keyword.parse(ctx, input),
+                        move |ctx, input| acc.parse(ctx, input),
                     ))
                 },
             )
-            .parse(input)
+            .parse(ctx, input)
     }
 }
 
@@ -214,7 +215,7 @@ impl Display for Keyword {
 #[cfg(test)]
 mod tests {
 
-    use std::io::Error;
+    use std::{io::Error, rc::Rc};
 
     use crate::source::file::SourceFile;
 
@@ -224,7 +225,7 @@ mod tests {
         let str_auto = SourceFile::inline("auto")?;
         assert_eq!(
             Ok((&str_auto[str_auto.len()..], Keyword::Auto)),
-            Keyword::Auto.parse(str_auto.stream())
+            Keyword::Auto.parse(Rc::new(true), str_auto.stream())
         );
         Ok(())
     }

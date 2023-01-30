@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, rc::Rc};
 
 use crate::{parse::*, scan::*};
 
@@ -32,8 +32,12 @@ impl IntConst {
     }
 }
 impl<'a> Parses<'a> for IntConst {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(
+        ctx: Rc<Self::Context>,
+        input: Self::Input,
+    ) -> ParseResult<'a, Self::Input, Self> {
         and_then(
             map(range(1.., digit_char()), |chars| -> String {
                 chars.into_iter().collect()
@@ -46,7 +50,7 @@ impl<'a> Parses<'a> for IntConst {
                     .and_then(Self::new)
             },
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -86,8 +90,12 @@ impl StringConst {
     }
 }
 impl<'a> Parses<'a> for StringConst {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(
+        ctx: Rc<Self::Context>,
+        input: Self::Input,
+    ) -> ParseResult<'a, Self::Input, Self> {
         map(
             right(
                 match_literal("\""),
@@ -100,7 +108,7 @@ impl<'a> Parses<'a> for StringConst {
             ),
             Self::new,
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 

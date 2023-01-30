@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::rc::Rc;
 
 use crate::parse::*;
 use crate::scan::*;
@@ -50,8 +51,12 @@ impl From<&str> for Id {
 }
 
 impl<'a> Parses<'a> for Id {
+    type Context = bool;
     type Input = &'a [Ch];
-    fn parse_into(input: Self::Input) -> ParseResult<'a, Self::Input, Self> {
+    fn parse_into(
+        ctx: Rc<Self::Context>,
+        input: Self::Input,
+    ) -> ParseResult<'a, Self::Input, Self> {
         msg(
             map(
                 map(
@@ -71,7 +76,7 @@ impl<'a> Parses<'a> for Id {
             ),
             "Id not matched",
         )
-        .parse(input)
+        .parse(ctx, input)
     }
 }
 
@@ -98,22 +103,22 @@ mod tests {
 
         assert_eq!(
             Ok((&my_class[my_class.len()..], Id("MyClass".to_owned()))),
-            parser.parse(my_class.stream())
+            parser.parse(Rc::new(true), my_class.stream())
         );
         assert_eq!(
             Err((("Id not matched".to_owned(), one2345.stream()), Vec::new())),
-            parser.parse(one2345.stream())
+            parser.parse(Rc::new(true), one2345.stream())
         );
         assert_eq!(
             Err((
                 ("Id not matched".to_owned(), one_class.stream()),
                 Vec::new()
             )),
-            parser.parse(one_class.stream())
+            parser.parse(Rc::new(true), one_class.stream())
         );
         assert_eq!(
             Ok((&class1.stream()[class1.len()..], Id("Class1".to_owned()))),
-            parser.parse(class1.stream())
+            parser.parse(Rc::new(true), class1.stream())
         );
         Ok(())
     }
